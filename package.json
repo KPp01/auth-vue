@@ -1,0 +1,35 @@
+{
+  "name": "auth-vue",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vuelidate/core": "^2.0.3",
+    "@vuelidate/validators": "^2.0.4",
+    "axios": "^1.7.2",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "date-fns": "^3.6.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "firebase": "^10.12.3",
+    "firebase-admin": "^12.2.0",
+    "node-fetch": "^3.3.2",
+    "primeflex": "^3.3.1",
+    "primeicons": "^5.0.0",
+    "primevue": "^4.0.0",
+    "vue": "^3.4.29",
+    "vue-recaptcha-v3": "^2.0.1",
+    "vue-router": "^4.4.0",
+    "vuex": "^4.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.5",
+    "vite": "^5.3.3"
+  }
+}
