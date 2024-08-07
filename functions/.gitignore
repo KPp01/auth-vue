@@ -1,2 +1,4 @@
 node_modules/
 *.local
+functions/serviceAccount.json
+secrets/auth-vue-bf3ca-64eca8dd4f79.json
