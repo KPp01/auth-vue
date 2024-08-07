@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+functions/serviceAccount.json
+secrets/auth-vue-bf3ca-64eca8dd4f79.json
