@@ -1,0 +1,43 @@
+--- Zawartość pliku: src/auth/userService.js ---
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { store } from '@/store/store';
+import { auth, db } from '@/firebase';
+import { getMessagingToken } from '@/firebase/notificationService';
+import { logError } from '@/logger';
+
+async function fetchUserData(user) {
+  const userRef = doc(db, 'users', user.uid);
+  try {
+    const docSnapshot = await getDoc(userRef);
+    if (docSnapshot.exists()) {
+      const userData = docSnapshot.data();
+      store.commit('setUser', userData);
+      return userData;
+    } else {
+      console.warn(`Nie znaleziono danych użytkownika o UID: ${user.uid}`);
+      return null;
+    }
+  } catch (error) {
+    logError('Błąd podczas pobierania danych użytkownika:', error);
+    throw new Error('Błąd podczas pobierania danych użytkownika');
+  }
+}
+
+export async function handleAuthState() {
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      try {
+        const userData = await fetchUserData(user);
+        if (userData) {
+          await getMessagingToken();
+        }
+      } catch (error) {
+        logError('Błąd podczas inicjalizacji stanu autoryzacji:', error);
+      }
+    } else {
+      store.commit('setUser', null);
+    }
+  });
+}
+

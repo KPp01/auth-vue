@@ -1,0 +1,46 @@
+--- Zawartość pliku: src/auth/userService.js ---
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { useAIStore } from '@/stores/aiStore'; // Używamy Pinia store
+import { auth, db } from '@/firebase';
+import { getMessagingToken } from '@/firebase/notificationService';
+import { logError } from '@/logger';
+
+async function fetchUserData(user) {
+  const aiStore = useAIStore();
+  const userRef = doc(db, 'users', user.uid);
+
+  try {
+    const docSnapshot = await getDoc(userRef);
+    if (docSnapshot.exists()) {
+      const userData = docSnapshot.data();
+      aiStore.setUser(userData); // Ustawienie użytkownika w Pinia store
+      return userData;
+    } else {
+      console.warn(`Nie znaleziono danych użytkownika o UID: ${user.uid}`);
+      return null;
+    }
+  } catch (error) {
+    logError('Błąd podczas pobierania danych użytkownika:', error);
+    throw new Error('Błąd podczas pobierania danych użytkownika');
+  }
+}
+
+export async function handleAuthState() {
+  onAuthStateChanged(auth, async (user) => {
+    const aiStore = useAIStore(); // Używamy Pinia store
+    if (user) {
+      try {
+        const userData = await fetchUserData(user);
+        if (userData) {
+          await getMessagingToken();
+        }
+      } catch (error) {
+        logError('Błąd podczas inicjalizacji stanu autoryzacji:', error);
+      }
+    } else {
+      aiStore.setUser(null); // Usunięcie użytkownika w Pinia store
+    }
+  });
+}
+

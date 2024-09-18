@@ -1,0 +1,807 @@
+--- Zawartość pliku: src/utils/complexityAnalysis.js ---
+import { tokenize } from './tokenizer';
+
+export function analyzeComplexity(text) {
+  const tokens = tokenize(text);
+  const sentenceCount = text.split(/[.!?]+/).length;
+  const averageWordLength = tokens.reduce((sum, word) => sum + word.length, 0) / tokens.length;
+  const uniqueWords = new Set(tokens).size;
+  const lexicalDiversity = uniqueWords / tokens.length;
+
+  const complexityScore = calculateComplexityScore(tokens.length, sentenceCount, averageWordLength, lexicalDiversity);
+
+  return {
+    complexity: getComplexityLevel(complexityScore),
+    score: complexityScore,
+    metrics: {
+      tokenCount: tokens.length,
+      sentenceCount,
+      averageWordLength,
+      lexicalDiversity,
+    },
+  };
+}
+
+function calculateComplexityScore(tokenCount, sentenceCount, averageWordLength, lexicalDiversity) {
+  const weightedScore = 
+    (tokenCount * 0.3) + 
+    (sentenceCount * 0.2) + 
+    (averageWordLength * 20) + 
+    (lexicalDiversity * 100);
+
+  return Math.min(Math.max(weightedScore / 100, 0), 1);
+}
+
+function getComplexityLevel(score) {
+  if (score < 0.3) return 'Low';
+  if (score < 0.6) return 'Medium';
+  return 'High';
+}
+
+export function suggestComplexityImprovements(complexityAnalysis) {
+  const suggestions = [];
+
+  if (complexityAnalysis.metrics.averageWordLength > 6) {
+    suggestions.push('Consider using simpler words to improve readability.');
+  }
+
+  if (complexityAnalysis.metrics.lexicalDiversity < 0.4) {
+    suggestions.push('Try to use a more diverse vocabulary to enrich the text.');
+  }
+
+  if (complexityAnalysis.metrics.sentenceCount < 3 && complexityAnalysis.metrics.tokenCount > 50) {
+    suggestions.push('Consider breaking down long sentences into shorter ones for clarity.');
+  }
+
+  return suggestions;
+}
+
+--- Zawartość pliku: src/utils/factChecker.js ---
+import axios from 'axios';
+import { tokenize } from './tokenizer';
+import { getTopNTokens } from './tokenizer';
+
+const FACT_CHECK_API_URL = 'https://factchecktools.googleapis.com/v1alpha1/claims:search';
+const API_KEY = process.env.FACT_CHECK_API_KEY;
+
+export async function checkFactualAccuracy(text) {
+  const tokens = tokenize(text);
+  const topKeywords = getTopNTokens(tokens, 5);
+
+  const claims = extractClaims(text);
+  const factCheckResults = await Promise.all(claims.map(claim => checkClaim(claim)));
+
+  return {
+    overallAccuracy: calculateOverallAccuracy(factCheckResults),
+    checkedClaims: factCheckResults,
+    topKeywords,
+    confidence: calculateConfidence(factCheckResults),
+  };
+}
+
+function extractClaims(text) {
+  // This is a simplified claim extraction. In a real-world scenario,
+  // you might use NLP techniques to identify statements that can be fact-checked.
+  return text.split('.').filter(sentence => sentence.trim().length > 10);
+}
+
+async function checkClaim(claim) {
+  try {
+    const response = await axios.get(FACT_CHECK_API_URL, {
+      params: {
+        key: API_KEY,
+        query: claim,
+      },
+    });
+
+    const factCheckResult = response.data.claims[0];
+    return {
+      claim,
+      claimReview: factCheckResult ? {
+        publisher: factCheckResult.claimReview[0].publisher.name,
+        url: factCheckResult.claimReview[0].url,
+        rating: factCheckResult.claimReview[0].textualRating,
+      } : null,
+      accuracy: calculateClaimAccuracy(factCheckResult),
+    };
+  } catch (error) {
+    console.error('Error checking claim:', error);
+    return {
+      claim,
+      claimReview: null,
+      accuracy: 0,
+      error: 'Failed to check this claim',
+    };
+  }
+}
+
+function calculateClaimAccuracy(factCheckResult) {
+  if (!factCheckResult) return 0;
+  // This is a simplified accuracy calculation. You might want to implement
+  // a more nuanced approach based on the specific ratings from your fact-checking source.
+  const rating = factCheckResult.claimReview[0].textualRating.toLowerCase();
+  if (rating.includes('true')) return 1;
+  if (rating.includes('mostly true')) return 0.75;
+  if (rating.includes('mixed')) return 0.5;
+  if (rating.includes('mostly false')) return 0.25;
+  if (rating.includes('false')) return 0;
+  return 0.5;  // Default to 0.5 if we can't determine accuracy
+}
+
+function calculateOverallAccuracy(factCheckResults) {
+  const accuracies = factCheckResults.map(result => result.accuracy);
+  return accuracies.reduce((sum, accuracy) => sum + accuracy, 0) / accuracies.length;
+}
+
+function calculateConfidence(factCheckResults) {
+  const checkedClaims = factCheckResults.filter(result => result.claimReview !== null);
+  return checkedClaims.length / factCheckResults.length;
+}
+
+export function suggestFactCheckImprovements(factCheckResults) {
+  const suggestions = [];
+
+  if (factCheckResults.confidence < 0.5) {
+    suggestions.push('Consider providing more specific, verifiable claims to improve fact-checking accuracy.');
+  }
+
+  const lowAccuracyClaims = factCheckResults.checkedClaims.filter(claim => claim.accuracy < 0.5);
+  if (lowAccuracyClaims.length > 0) {
+    suggestions.push(`Review and possibly revise the following claims: ${lowAccuracyClaims.map(claim => claim.claim).join(', ')}`);
+  }
+
+  return suggestions;
+}
+
+--- Zawartość pliku: src/utils/formatters.js ---
+import { format, formatDistanceToNow } from 'date-fns';
+import { enUS, pl } from 'date-fns/locale';
+
+const locales = { enUS, pl };
+
+export function formatNumber(number, options = {}) {
+  const {
+    locale = 'en-US',
+    style = 'decimal',
+    minimumFractionDigits = 0,
+    maximumFractionDigits = 2,
+    notation = 'standard'
+  } = options;
+
+  return new Intl.NumberFormat(locale, {
+    style,
+    minimumFractionDigits,
+    maximumFractionDigits,
+    notation
+  }).format(number);
+}
+
+export function formatCurrency(amount, options = {}) {
+  const {
+    currency = 'USD',
+    locale = 'en-US'
+  } = options;
+
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency
+  }).format(amount);
+}
+
+export function formatDate(date, formatStr = 'PP', options = {}) {
+  const { locale = 'enUS' } = options;
+  return format(date, formatStr, {
+    locale: locales[locale]
+  });
+}
+
+export function formatRelativeTime(date, options = {}) {
+  const { locale = 'enUS', addSuffix = true } = options;
+  return formatDistanceToNow(date, {
+    addSuffix,
+    locale: locales[locale]
+  });
+}
+
+export function truncateText(text, maxLength = 100, ellipsis = '...') {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength - ellipsis.length) + ellipsis;
+}
+
+export function slugify(text) {
+  return text
+    .toString()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w\-]+/g, '')
+    .replace(/\-\-+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+}
+
+export function capitalize(string) {
+  return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+--- Zawartość pliku: src/utils/languageDetection.js ---
+import { franc } from 'franc';
+import langs from 'langs';
+import { tokenize } from './tokenizer';
+
+export function detectLanguage(text, options = {}) {
+  const {
+    minConfidence = 0.5,
+    allowedLanguages = null,
+    fallbackLanguage = 'en'
+  } = options;
+
+  const tokens = tokenize(text, { removeStopwords: false, stem: false });
+  const langCode = franc(tokens.join(' '), { 
+    minLength: 10,
+    only: allowedLanguages
+  });
+
+  if (langCode === 'und') {
+    return {
+      languageCode: fallbackLanguage,
+      languageName: langs.where('1', fallbackLanguage).name,
+      confidence: 0,
+      isReliable: false
+    };
+  }
+
+  const langInfo = langs.where('3', langCode);
+  const confidence = calculateConfidence(text, langCode);
+
+  return {
+    languageCode: langInfo['1'],
+    languageName: langInfo.name,
+    confidence,
+    isReliable: confidence >= minConfidence
+  };
+}
+
+function calculateConfidence(text, detectedLangCode) {
+  // To jest uproszczona implementacja. W rzeczywistości, można by użyć
+  // bardziej zaawansowanych metod, np. porównując wyniki z kilku detektorów języka.
+  const textLength = text.length;
+  const baseConfidence = 0.3;
+  const lengthFactor = Math.min(textLength / 100, 1);
+  return baseConfidence + (1 - baseConfidence) * lengthFactor;
+}
+
+export function detectMultipleLanguages(text, options = {}) {
+  const {
+    minLength = 50,
+    minConfidence = 0.3
+  } = options;
+
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+  const languageSegments = [];
+
+  for (let i = 0; i < sentences.length; i++) {
+    const segment = sentences.slice(i, i + 3).join(' ');
+    if (segment.length < minLength) continue;
+
+    const detection = detectLanguage(segment, { minConfidence });
+    if (detection.isReliable) {
+      languageSegments.push({
+        text: segment,
+        ...detection
+      });
+      i += 2;  // Skip the next two sentences as they were included in this segment
+    }
+  }
+
+  return languageSegments;
+}
+
+--- Zawartość pliku: src/utils/readabilityAnalysis.js ---
+import { tokenize } from './tokenizer';
+
+export function analyzeReadability(text) {
+  const sentences = text.split(/[.!?]+/).filter(Boolean);
+  const words = tokenize(text, { removeStopwords: false, stem: false });
+  const syllables = countSyllables(words);
+
+  const averageWordsPerSentence = words.length / sentences.length;
+  const averageSyllablesPerWord = syllables / words.length;
+
+  const fleschKincaidGrade = calculateFleschKincaidGrade(words.length, sentences.length, syllables);
+  const fleschReadingEase = calculateFleschReadingEase(words.length, sentences.length, syllables);
+  const smogIndex = calculateSMOGIndex(sentences.length, syllables);
+  const automatedReadabilityIndex = calculateAutomatedReadabilityIndex(text, words.length, sentences.length);
+
+  return {
+    fleschKincaidGrade,
+    fleschReadingEase,
+    smogIndex,
+    automatedReadabilityIndex,
+    averageWordsPerSentence,
+    averageSyllablesPerWord,
+    totalWords: words.length,
+    totalSentences: sentences.length,
+    totalSyllables: syllables,
+  };
+}
+
+function countSyllables(words) {
+  return words.reduce((count, word) => count + countWordSyllables(word), 0);
+}
+
+function countWordSyllables(word) {
+  word = word.toLowerCase();
+  if (word.length <= 3) return 1;
+  word = word.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '');
+  word = word.replace(/^y/, '');
+  return word.match(/[aeiouy]{1,2}/g)?.length || 1;
+}
+
+function calculateFleschKincaidGrade(words, sentences, syllables) {
+  return (0.39 * (words / sentences) + 11.8 * (syllables / words) - 15.59).toFixed(1);
+}
+
+function calculateFleschReadingEase(words, sentences, syllables) {
+  return (206.835 - 1.015 * (words / sentences) - 84.6 * (syllables / words)).toFixed(1);
+}
+
+function calculateSMOGIndex(sentences, syllables) {
+  return (1.0430 * Math.sqrt(syllables * (30 / sentences)) + 3.1291).toFixed(1);
+}
+
+function calculateAutomatedReadabilityIndex(text, words, sentences) {
+  const characters = text.replace(/\s+/g, '').length;
+  return (4.71 * (characters / words) + 0.5 * (words / sentences) - 21.43).toFixed(1);
+}
+
+export function getReadabilityLevel(fleschReadingEase) {
+  if (fleschReadingEase >= 90) return "Very Easy";
+  if (fleschReadingEase >= 80) return "Easy";
+  if (fleschReadingEase >= 70) return "Fairly Easy";
+  if (fleschReadingEase >= 60) return "Standard";
+  if (fleschReadingEase >= 50) return "Fairly Difficult";
+  if (fleschReadingEase >= 30) return "Difficult";
+  return "Very Confusing";
+}
+
+--- Zawartość pliku: src/utils/stopwords.js ---
+// Lista stop words dla języka angielskiego
+const englishStopwords = [
+    'a', 'about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 
+    'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 
+    'by', 'could', 'did', 'do', 'does', 'doing', 'down', 'during', 'each', 'few', 'for', 'from', 
+    'further', 'had', 'has', 'have', 'having', 'he', 'her', 'here', 'hers', 'herself', 'him', 
+    'himself', 'his', 'how', 'i', 'if', 'in', 'into', 'is', 'it', 'its', 'itself', 'me', 'more', 
+    'most', 'my', 'myself', 'no', 'nor', 'not', 'of', 'off', 'on', 'once', 'only', 'or', 'other', 
+    'ought', 'our', 'ours', 'ourselves', 'out', 'over', 'own', 'same', 'she', 'should', 'so', 
+    'some', 'such', 'than', 'that', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 
+    'these', 'they', 'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 
+    'was', 'we', 'were', 'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'why', 'with', 
+    'would', 'you', 'your', 'yours', 'yourself', 'yourselves'
+  ];
+  
+  // Lista stop words dla języka polskiego
+  const polishStopwords = [
+    'a', 'aby', 'ach', 'ale', 'bardzo', 'bez', 'bo', 'by', 'być', 'ci', 'cię', 'ciebie', 'co', 
+    'czy', 'dla', 'do', 'dużo', 'dwa', 'dwaj', 'dwie', 'dwoje', 'dziś', 'dzisiaj', 'gdy', 'gdyby', 
+    'gdyż', 'go', 'ich', 'i', 'ile', 'im', 'inny', 'ja', 'ją', 'jak', 'jakby', 'jaki', 'je', 'jeden', 
+    'jedna', 'jedno', 'jego', 'jej', 'jemu', 'jeśli', 'jest', 'jestem', 'jeżeli', 'już', 'każdy', 
+    'kiedy', 'kto', 'który', 'ma', 'mnie', 'moi', 'mój', 'moja', 'moje', 'my', 'na', 'nam', 'nas', 
+    'nasi', 'nasz', 'nasza', 'nasze', 'nie', 'nią', 'nic', 'niech', 'niego', 'niej', 'niemu', 'nigdy', 
+    'nim', 'nimi', 'ono', 'oraz', 'owszem', 'pan', 'po', 'pod', 'ponieważ', 'przez', 'przy', 'przed', 
+    'się', 'tak', 'także', 'tam', 'te', 'tego', 'tej', 'ten', 'to', 'tobie', 'tu', 'twoi', 'twój', 
+    'twoja', 'twoje', 'ty', 'w', 'we', 'więc', 'wszyscy', 'wszystkie', 'za', 'że'
+  ];
+  
+  // Eksportowanie list stop words
+  export const stopwords = {
+    english: englishStopwords,
+    polish: polishStopwords
+  };
+  
+
+--- Zawartość pliku: src/utils/textComparison.js ---
+import { tokenize } from './tokenizer';
+import natural from 'natural';
+
+const TfIdf = natural.TfIdf;
+
+export function calculateSimilarity(text1, text2) {
+  const tokens1 = tokenize(text1);
+  const tokens2 = tokenize(text2);
+
+  const jaccardSimilarity = calculateJaccardSimilarity(tokens1, tokens2);
+  const cosineSimilarity = calculateCosineSimilarity(text1, text2);
+  const levenshteinDistance = natural.LevenshteinDistance(text1, text2);
+  const normalizedLevenshteinSimilarity = 1 - (levenshteinDistance / Math.max(text1.length, text2.length));
+
+  return {
+    jaccardSimilarity: jaccardSimilarity.toFixed(4),
+    cosineSimilarity: cosineSimilarity.toFixed(4),
+    levenshteinDistance,
+    normalizedLevenshteinSimilarity: normalizedLevenshteinSimilarity.toFixed(4),
+    averageSimilarity: ((jaccardSimilarity + cosineSimilarity + normalizedLevenshteinSimilarity) / 3).toFixed(4),
+    commonWords: findCommonWords(tokens1, tokens2),
+    uniqueWords: {
+      text1: findUniqueWords(tokens1, tokens2),
+      text2: findUniqueWords(tokens2, tokens1)
+    }
+  };
+}
+
+function calculateJaccardSimilarity(tokens1, tokens2) {
+  const set1 = new Set(tokens1);
+  const set2 = new Set(tokens2);
+  const intersection = new Set([...set1].filter(x => set2.has(x)));
+  const union = new Set([...set1, ...set2]);
+  return intersection.size / union.size;
+}
+
+function calculateCosineSimilarity(text1, text2) {
+  const tfidf = new TfIdf();
+  tfidf.addDocument(text1);
+  tfidf.addDocument(text2);
+
+  const vector1 = tfidf.listTerms(0);
+  const vector2 = tfidf.listTerms(1);
+
+  let dotProduct = 0;
+  let magnitude1 = 0;
+  let magnitude2 = 0;
+
+  vector1.forEach(term => {
+    const idx = vector2.findIndex(t => t.term === term.term);
+    if (idx !== -1) {
+      dotProduct += term.tfidf * vector2[idx].tfidf;
+    }
+    magnitude1 += term.tfidf * term.tfidf;
+  });
+
+  vector2.forEach(term => {
+    magnitude2 += term.tfidf * term.tfidf;
+  });
+
+  magnitude1 = Math.sqrt(magnitude1);
+  magnitude2 = Math.sqrt(magnitude2);
+
+  return dotProduct / (magnitude1 * magnitude2);
+}
+
+function findCommonWords(tokens1, tokens2) {
+  const set1 = new Set(tokens1);
+  const set2 = new Set(tokens2);
+  return [...set1].filter(x => set2.has(x));
+}
+
+function findUniqueWords(tokens1, tokens2) {
+  const set1 = new Set(tokens1);
+  const set2 = new Set(tokens2);
+  return [...set1].filter(x => !set2.has(x));
+}
+
+export function analyzeSimilarityTrends(texts) {
+  const similarities = [];
+  for (let i = 0; i < texts.length - 1; i++) {
+    similarities.push(calculateSimilarity(texts[i], texts[i + 1]));
+  }
+
+  const averageSimilarity = similarities.reduce((sum, sim) => sum + parseFloat(sim.averageSimilarity), 0) / similarities.length;
+  const similarityTrend = similarities.map((sim, index) => ({
+    pairIndex: index,
+    averageSimilarity: sim.averageSimilarity,
+    trend: index > 0 ? (parseFloat(sim.averageSimilarity) > parseFloat(similarities[index - 1].averageSimilarity) ? 'increasing' : 'decreasing') : 'initial',
+    commonWords: sim.commonWords.length,
+    uniqueWordsCount: {
+      text1: sim.uniqueWords.text1.length,
+      text2: sim.uniqueWords.text2.length
+    }
+  }));
+
+  return {
+    overallAverageSimilarity: averageSimilarity.toFixed(4),
+    similarityTrend,
+    consistencyScore: calculateConsistencyScore(similarityTrend),
+    divergencePoints: findDivergencePoints(similarityTrend)
+  };
+}
+
+function calculateConsistencyScore(similarityTrend) {
+  const trends = similarityTrend.slice(1).map(item => item.trend);
+  const increasingCount = trends.filter(trend => trend === 'increasing').length;
+  const decreasingCount = trends.filter(trend => trend === 'decreasing').length;
+  return Math.abs(increasingCount - decreasingCount) / trends.length;
+}
+
+function findDivergencePoints(similarityTrend) {
+  const threshold = 0.1; // Możesz dostosować ten próg
+  return similarityTrend.filter((item, index, array) => {
+    if (index === 0) return false;
+    return Math.abs(parseFloat(item.averageSimilarity) - parseFloat(array[index - 1].averageSimilarity)) > threshold;
+  }).map(item => item.pairIndex);
+}
+
+--- Zawartość pliku: src/utils/textProcessing.js ---
+import natural from 'natural';
+import { tokenize } from './tokenizer';
+
+const TfIdf = natural.TfIdf;
+const stemmer = natural.PorterStemmer;
+
+export function extractKeyPoints(text, options = { maxPoints: 5, minRelevance: 0.1 }) {
+  const { maxPoints, minRelevance } = options;
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+  const tfidf = new TfIdf();
+
+  sentences.forEach(sentence => tfidf.addDocument(tokenize(sentence)));
+
+  const keyPoints = sentences.map((sentence, index) => {
+    const terms = tfidf.listTerms(index);
+    const relevance = terms.reduce((sum, term) => sum + term.tfidf, 0) / terms.length;
+    return { sentence: sentence.trim(), relevance };
+  });
+
+  return keyPoints
+    .filter(point => point.relevance >= minRelevance)
+    .sort((a, b) => b.relevance - a.relevance)
+    .slice(0, maxPoints);
+}
+
+export function generateBulletPoints(keyPoints) {
+  return keyPoints.map(point => `• ${point.sentence}`).join('\n');
+}
+
+export function summarizeText(text, options = { sentenceRatio: 0.3, minSentences: 3, maxSentences: 5 }) {
+  const { sentenceRatio, minSentences, maxSentences } = options;
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+  const tfidf = new TfIdf();
+
+  sentences.forEach(sentence => tfidf.addDocument(tokenize(sentence)));
+
+  const rankedSentences = sentences.map((sentence, index) => {
+    const terms = tfidf.listTerms(index);
+    const score = terms.reduce((sum, term) => sum + term.tfidf, 0);
+    return { sentence: sentence.trim(), score };
+  }).sort((a, b) => b.score - a.score);
+
+  const numSentences = Math.max(
+    minSentences,
+    Math.min(maxSentences, Math.round(sentences.length * sentenceRatio))
+  );
+
+  return rankedSentences.slice(0, numSentences).map(item => item.sentence).join(' ');
+}
+
+export function findNamedEntities(text) {
+  const language = "EN";
+  const tokenizer = new natural.WordTokenizer();
+  const tokens = tokenizer.tokenize(text);
+  const lexicon = new natural.Lexicon(language, stemmer);
+  const ruleSet = new natural.RuleSet('EN');
+  const tagger = new natural.BrillPOSTagger(lexicon, ruleSet);
+
+  const taggedTokens = tagger.tag(tokens);
+
+  const namedEntities = [];
+  let currentEntity = [];
+
+  taggedTokens.forEach((taggedToken, index) => {
+    const [token, tag] = taggedToken;
+    if (tag.startsWith('N') && token[0] === token[0].toUpperCase()) {
+      currentEntity.push(token);
+    } else {
+      if (currentEntity.length > 0) {
+        namedEntities.push(currentEntity.join(' '));
+        currentEntity = [];
+      }
+    }
+  });
+
+  if (currentEntity.length > 0) {
+    namedEntities.push(currentEntity.join(' '));
+  }
+
+  return [...new Set(namedEntities)];
+}
+
+export function generateWordCloud(text, options = { maxWords: 100, minOccurrences: 2 }) {
+  const { maxWords, minOccurrences } = options;
+  const tokens = tokenize(text, { removeStopwords: true, stem: true });
+  const wordCounts = tokens.reduce((acc, token) => {
+    acc[token] = (acc[token] || 0) + 1;
+    return acc;
+  }, {});
+
+  return Object.entries(wordCounts)
+    .filter(([_, count]) => count >= minOccurrences)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, maxWords)
+    .map(([word, count]) => ({ text: word, value: count }));
+}
+
+--- Zawartość pliku: src/utils/tokenizer.js ---
+import natural from 'natural';
+
+const tokenizer = new natural.WordTokenizer();
+const stemmer = natural.PorterStemmer;
+
+export function tokenize(text, options = {}) {
+  const {
+    lowercase = true,
+    removeStopwords = true,
+    stem = false,
+    removePunctuation = true,
+  } = options;
+
+  let processedText = text;
+
+  if (lowercase) {
+    processedText = processedText.toLowerCase();
+  }
+
+  if (removePunctuation) {
+    processedText = processedText.replace(/[^\w\s]|_/g, "").replace(/\s+/g, " ");
+  }
+
+  let tokens = tokenizer.tokenize(processedText);
+
+  if (removeStopwords) {
+    const stopwords = new Set(natural.stopwords);
+    tokens = tokens.filter(token => !stopwords.has(token));
+  }
+
+  if (stem) {
+    tokens = tokens.map(token => stemmer.stem(token));
+  }
+
+  return tokens;
+}
+
+export function calculateTokenFrequency(tokens) {
+  return tokens.reduce((freq, token) => {
+    freq[token] = (freq[token] || 0) + 1;
+    return freq;
+  }, {});
+}
+
+export function getTopNTokens(tokens, n = 10) {
+  const freq = calculateTokenFrequency(tokens);
+  return Object.entries(freq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([token, frequency]) => ({ token, frequency }));
+}
+
+export function estimateTokenCount(text) {
+  // Przybliżone oszacowanie liczby tokenów dla modeli GPT
+  return Math.ceil(text.length / 4);
+}
+
+--- Zawartość pliku: src/utils/visualizationUtils.js ---
+import { Chart } from 'chart.js/auto';
+import * as d3 from 'd3';
+
+export function generateVisualizationData(type, data) {
+  switch (type) {
+    case 'tokenDistribution':
+      return prepareTokenDistributionData(data);
+    case 'sentimentAnalysis':
+      return prepareSentimentAnalysisData(data);
+    case 'conceptMap':
+      return prepareConceptMapData(data);
+    case 'timeSeriesAnalysis':
+      return prepareTimeSeriesData(data);
+    default:
+      throw new Error(`Unsupported visualization type: ${type}`);
+  }
+}
+
+function prepareTokenDistributionData(tokens) {
+  const tokenCounts = tokens.reduce((acc, token) => {
+    acc[token] = (acc[token] || 0) + 1;
+    return acc;
+  }, {});
+
+  return Object.entries(tokenCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 20)
+    .map(([token, count]) => ({ token, count }));
+}
+
+function prepareSentimentAnalysisData(sentiments) {
+  const sentimentCounts = sentiments.reduce((acc, sentiment) => {
+    acc[sentiment] = (acc[sentiment] || 0) + 1;
+    return acc;
+  }, {});
+
+  return Object.entries(sentimentCounts)
+    .map(([sentiment, count]) => ({ sentiment, count }));
+}
+
+function prepareConceptMapData(concepts) {
+  return {
+    nodes: concepts.map(concept => ({ id: concept.name, group: concept.category })),
+    links: concepts.flatMap(concept => 
+      concept.related.map(related => ({ source: concept.name, target: related, value: 1 }))
+    )
+  };
+}
+
+function prepareTimeSeriesData(timeSeriesData) {
+  return timeSeriesData.map(dataPoint => ({
+    date: new Date(dataPoint.timestamp),
+    value: dataPoint.value
+  }));
+}
+
+export async function exportChart(element, format, fileName) {
+  if (!(element instanceof HTMLCanvasElement)) {
+    throw new Error('Element must be a canvas for chart export');
+  }
+
+  switch (format) {
+    case 'png':
+      return exportToPNG(element, fileName);
+    case 'svg':
+      return exportToSVG(element, fileName);
+    case 'json':
+      return exportToJSON(element, fileName);
+    default:
+      throw new Error(`Unsupported export format: ${format}`);
+  }
+}
+
+async function exportToPNG(canvas, fileName) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        resolve(url);
+      } else {
+        reject(new Error('Failed to create blob from canvas'));
+      }
+    }, 'image/png');
+  });
+}
+
+async function exportToSVG(canvas, fileName) {
+  const ctx = canvas.getContext('2d');
+  const svgString = d3.select(canvas).select('svg').node().outerHTML;
+  const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+  return URL.createObjectURL(blob);
+}
+
+async function exportToJSON(canvas, fileName) {
+  const chart = Chart.getChart(canvas);
+  if (!chart) {
+    throw new Error('No Chart.js instance found for this canvas');
+  }
+  const data = {
+    type: chart.config.type,
+    data: chart.data,
+    options: chart.options
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  return URL.createObjectURL(blob);
+}
+
+export function createResponsiveChart(canvas, config) {
+  const ctx = canvas.getContext('2d');
+  return new Chart(ctx, {
+    ...config,
+    options: {
+      ...config.options,
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        ...config.options?.plugins,
+        legend: {
+          position: 'top',
+        },
+        title: {
+          display: true,
+          text: config.options?.plugins?.title?.text || 'Chart Title'
+        }
+      }
+    }
+  });
+}

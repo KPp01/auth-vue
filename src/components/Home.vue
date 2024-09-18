@@ -11,7 +11,6 @@
         <li>Zarządzanie profilem użytkownika</li>
         <li>Integracja z bazą danych w czasie rzeczywistym</li>
         <li>Dodawanie i zarządzanie zleceniami</li>
-        <li>Powiadomienia o statusie zlecenia</li>
       </ul>
     </div>
 
@@ -21,6 +20,7 @@
       <ol>
         <li>Zarejestruj się, tworząc nowe konto użytkownika.</li>
         <li>Zaloguj się, używając swojego adresu e-mail i hasła.</li>
+        <li>Przeczytać i Zaakceptować regulamin</li>
         <li>Uzupełnij swój profil, dodając niezbędne informacje.</li>
         <li>Rozpocznij dodawanie zleceń i zarządzanie nimi poprzez panel użytkownika.</li>
       </ol>

@@ -1,0 +1,4436 @@
+--- Zawartość pliku: src/components/modulesAI/AIDebugger.vue ---
+<template>
+    <div class="ai-debugger">
+      <h3>AI Debugger <span class="version">v2.1</span></h3>
+      <div class="debug-controls">
+        <button @click="toggleDebugger" :class="{ active: isActive }">
+          {{ isActive ? 'Deactivate' : 'Activate' }} Debugger
+        </button>
+        <select v-model="debugLevel" :disabled="!isActive">
+          <option value="basic">Basic</option>
+          <option value="advanced">Advanced</option>
+          <option value="expert">Expert</option>
+        </select>
+      </div>
+      <div v-if="isActive" class="debug-content">
+        <div class="debug-section">
+          <h4>Token Usage
+            <InfoTooltip text="Shows the number of tokens used in the request and response." />
+          </h4>
+          <TokenMeter :usedTokens="debugInfo.tokenUsage.total" :maxTokens="debugInfo.tokenUsage.max" />
+        </div>
+        <div class="debug-section">
+          <h4>Response Time
+            <InfoTooltip text="Time taken for the AI to generate a response." />
+          </h4>
+          <ResponseTimeGraph :responseTimes="debugInfo.responseTimes" />
+        </div>
+        <div v-if="showModelInternals" class="debug-section">
+          <h4>Model Internals
+            <InfoTooltip text="Internal state and decision process of the AI model." />
+          </h4>
+          <ModelInternalsVisualizer :internalState="debugInfo.modelInternals" />
+        </div>
+        <div v-if="showNeuralActivations" class="debug-section">
+          <h4>Neural Network Activation
+            <InfoTooltip text="Visual representation of neural network activations." />
+          </h4>
+          <NeuralNetworkVisualizer :activations="debugInfo.neuralActivations" />
+        </div>
+        <div class="debug-section">
+          <h4>Error Log
+            <InfoTooltip text="Log of errors and warnings encountered during processing." />
+          </h4>
+          <ErrorLog :errors="debugInfo.errors" :warnings="debugInfo.warnings" />
+        </div>
+      </div>
+    </div>
+  </template>
+  
+  <script>
+  import { ref, computed, watch } from 'vue';
+  import InfoTooltip from './InfoTooltip.vue';
+  import TokenMeter from './TokenMeter.vue';
+  import ResponseTimeGraph from './ResponseTimeGraph.vue';
+  import ModelInternalsVisualizer from './ModelInternalsVisualizer.vue';
+  import NeuralNetworkVisualizer from './NeuralNetworkVisualizer.vue';
+  import ErrorLog from './ErrorLog.vue';
+  
+  export default {
+    name: 'AIDebugger',
+    components: {
+      InfoTooltip,
+      TokenMeter,
+      ResponseTimeGraph,
+      ModelInternalsVisualizer,
+      NeuralNetworkVisualizer,
+      ErrorLog
+    },
+    props: {
+      debugInfo: {
+        type: Object,
+        required: true
+      }
+    },
+    setup(props) {
+      const isActive = ref(false); // Przechowuje stan aktywacji debuggera
+      const debugLevel = ref('basic'); // Przechowuje aktualny poziom debugowania
+      const showModelInternals = computed(() => debugLevel.value === 'advanced' || debugLevel.value === 'expert'); // Wybór widoku wewnętrznego stanu modelu
+      const showNeuralActivations = computed(() => debugLevel.value === 'expert'); // Pokazuje wizualizację aktywacji sieci neuronowej tylko na poziomie 'expert'
+  
+      // Funkcja odpowiedzialna za aktywowanie/dezaktywowanie debuggera
+      const toggleDebugger = () => {
+        isActive.value = !isActive.value;
+        console.log(`AI Debugger ${isActive.value ? 'activated' : 'deactivated'}`);
+      };
+  
+      // Watcher, który monitoruje zmiany poziomu debugowania
+      watch(debugLevel, (newLevel) => {
+        console.log(`Debug level changed to: ${newLevel}`);
+      });
+  
+      return {
+        isActive,
+        debugLevel,
+        toggleDebugger,
+        showModelInternals,
+        showNeuralActivations
+      };
+    }
+  };
+  </script>
+  
+  <style scoped>
+  .ai-debugger {
+    background: #1e1e1e;
+    color: #e0e0e0;
+    padding: 20px;
+    border-radius: 10px;
+    font-family: 'Courier New', monospace;
+  }
+  
+  .version {
+    font-size: 0.8em;
+    color: #00ff00;
+    margin-left: 10px;
+  }
+  
+  .debug-controls {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  
+  button,
+  select {
+    background: #333;
+    color: #fff;
+    border: 1px solid #555;
+    padding: 8px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  button:hover,
+  select:hover {
+    background: #444;
+  }
+  
+  button.active {
+    background: #00ff00;
+    color: #000;
+  }
+  
+  .debug-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+  }
+  
+  .debug-section {
+    background: #2a2a2a;
+    padding: 15px;
+    border-radius: 8px;
+  }
+  
+  h4 {
+    color: #00ff00;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+  }
+  </style>
+  
+
+--- Zawartość pliku: src/components/modulesAI/AIWorkspace.vue ---
+<template>
+    <div class="ai-workspace">
+      <CommandCreator @command-created="processCommand" :isProcessing="isProcessing" />
+      <ModelSelector v-model="selectedModel" :availableModels="availableModels" />
+      <ResponseViewer :response="aiResponse" :isError="isError" :processingTime="processingTime" />
+      <AIDebugger :debugInfo="debugInfo" v-if="showDebugger" />
+      <ThreadManager :currentThread="currentThread" @thread-changed="changeThread" :threads="threads" />
+      <ExportManager :data="exportData" @export-complete="handleExportComplete" />
+    </div>
+  </template>
+  
+  <script>
+  import { ref, computed, onMounted } from 'vue';
+  import { useAIStore } from '@/stores/aiStore';
+  import CommandCreator from './CommandCreator.vue';
+  import ModelSelector from './ModelSelector.vue';
+  import ResponseViewer from './ResponseViewer.vue';
+  import AIDebugger from './AIDebugger.vue';
+  import ThreadManager from './ThreadManager.vue';
+  import ExportManager from './ExportManager.vue';
+  import { processAICommand } from '@/services/AIService';
+  import { logError } from '@/utils/errorLogger';
+  
+  export default {
+    name: 'AIWorkspace',
+    components: {
+      CommandCreator,
+      ModelSelector,
+      ResponseViewer,
+      AIDebugger,
+      ThreadManager,
+      ExportManager,
+    },
+    setup() {
+      const aiStore = useAIStore();
+      const selectedModel = ref('gpt-4');
+      const aiResponse = ref(null);
+      const debugInfo = ref({});
+      const currentThread = ref(null);
+      const exportData = ref({});
+      const isProcessing = ref(false);
+      const isError = ref(false);
+      const processingTime = ref(0);
+      const showDebugger = ref(false);
+  
+      const availableModels = computed(() => aiStore.availableModels);
+      const threads = computed(() => aiStore.threads);
+  
+      onMounted(async () => {
+        try {
+          await aiStore.fetchAvailableModels();
+        } catch (error) {
+          logError('Failed to fetch available models', error);
+        }
+      });
+  
+      const processCommand = async (command) => {
+        if (isProcessing.value) return; // Uniknięcie ponownego wywołania w trakcie przetwarzania
+  
+        isProcessing.value = true;
+        isError.value = false;
+        const startTime = performance.now();
+  
+        try {
+          if (!command) return; // Uniknięcie pustego wywołania
+  
+          const result = await processAICommand(command, selectedModel.value);
+          aiResponse.value = result.response;
+          debugInfo.value = result.debugInfo;
+          exportData.value = { command, response: aiResponse.value };
+          aiStore.addToHistory({ command, response: aiResponse.value, model: selectedModel.value });
+        } catch (error) {
+          isError.value = true;
+          aiResponse.value = "An error occurred while processing your request.";
+          logError('Error processing command', error);
+        } finally {
+          isProcessing.value = false;
+          processingTime.value = performance.now() - startTime;
+        }
+      };
+  
+      const changeThread = (thread) => {
+        if (currentThread.value === thread) return; // Uniknięcie wielokrotnego przełączania na ten sam wątek
+        currentThread.value = thread;
+        aiStore.loadThread(thread.id);
+      };
+  
+      const handleExportComplete = (exportedData) => {
+        console.log('Export completed', exportedData);
+      };
+  
+      return {
+        selectedModel,
+        aiResponse,
+        debugInfo,
+        currentThread,
+        exportData,
+        isProcessing,
+        isError,
+        processingTime,
+        showDebugger,
+        availableModels,
+        threads,
+        processCommand,
+        changeThread,
+        handleExportComplete,
+      };
+    },
+  };
+  </script>
+  
+  <style scoped>
+  .ai-workspace {
+    display: grid;
+    grid-template-columns: 3fr 1fr;
+    grid-template-rows: auto auto 1fr auto;
+    gap: 20px;
+    padding: 20px;
+    height: 100vh;
+    box-sizing: border-box;
+  }
+  
+  @media (max-width: 768px) {
+    .ai-workspace {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto;
+    }
+  }
+  </style>
+  
+
+--- Zawartość pliku: src/components/modulesAI/CodeHighlighter.js ---
+i// src/components/modulesAI/CodeHighlighter.js
+import hljs from 'highlight.js';
+import 'highlight.js/styles/atom-one-dark.css'; // Możesz wybrać różne style
+
+export default {
+  name: 'CodeHighlighter',
+  props: {
+    code: {
+      type: String,
+      required: true
+    },
+    language: {
+      type: String,
+      default: ''
+    },
+    autoDetectLanguage: {
+      type: Boolean,
+      default: true
+    }
+  },
+  render(createElement) {
+    let highlightedCode;
+    if (this.autoDetectLanguage) {
+      highlightedCode = hljs.highlightAuto(this.code).value;
+    } else {
+      highlightedCode = hljs.highlight(this.language, this.code).value;
+    }
+
+    return createElement('pre', {
+      class: 'hljs'
+    }, [
+      createElement('code', {
+        domProps: {
+          innerHTML: highlightedCode
+        }
+      })
+    ]);
+  },
+  mounted() {
+    // Sprawdzenie, czy element istnieje przed aktualizacją, aby uniknąć niepotrzebnych wywołań
+    if (this.code) {
+      this.updateLineNumbers();
+    }
+  },
+  updated() {
+    // Sprawdzenie, czy nastąpiła rzeczywista zmiana w kodzie, aby uniknąć niepotrzebnych aktualizacji
+    if (this.code) {
+      this.updateLineNumbers();
+    }
+  },
+  methods: {
+    updateLineNumbers() {
+      const codeBlock = this.$el.querySelector('code');
+      if (codeBlock) {
+        const lines = codeBlock.innerHTML.split('\n');
+        const numberedLines = lines.map((line, index) => 
+          `<span class="line-number">${index + 1}</span>${line}`
+        );
+        codeBlock.innerHTML = numberedLines.join('\n');
+      }
+    }
+  }
+};
+
+
+--- Zawartość pliku: src/components/modulesAI/CommandCreator.vue ---
+<template>
+    <div class="command-creator">
+        <textarea v-model="commandText" @input="autoResize" :placeholder="placeholder" :disabled="isProcessing"
+            ref="commandInput" class="command-input"></textarea>
+        <div class="command-controls">
+            <button @click="submitCommand" :disabled="isProcessing || !commandText.trim()">
+                {{ isProcessing ? 'Processing...' : 'Submit' }}
+            </button>
+            <button @click="clearCommand" :disabled="isProcessing || !commandText.trim()">
+                Clear
+            </button>
+        </div>
+        <div v-if="suggestions.length" class="command-suggestions">
+            <p>Suggestions:</p>
+            <ul>
+                <li v-for="(suggestion, index) in suggestions" :key="index" @click="applySuggestion(suggestion)">
+                    {{ suggestion }}
+                </li>
+            </ul>
+        </div>
+    </div>
+</template>
+
+<script>
+import { ref, watch } from 'vue';
+import { useSuggestions } from '@/composables/useSuggestions';
+import { useCommandHistory } from '@/composables/useCommandHistory';
+
+export default {
+    name: 'CommandCreator',
+    props: {
+        isProcessing: {
+            type: Boolean,
+            default: false
+        }
+    },
+    emits: ['command-created'],
+    setup(props, { emit }) {
+        const commandText = ref('');
+        const commandInput = ref(null);
+        const { suggestions, generateSuggestions } = useSuggestions();
+        const { addToHistory, getLastCommand } = useCommandHistory();
+
+        const placeholder = "Enter your AI command here...";
+
+        watch(commandText, (newValue) => {
+            if (newValue.length > 3) {
+                generateSuggestions(newValue);
+            } else {
+                suggestions.value = [];
+            }
+        });
+
+        const autoResize = () => {
+            const el = commandInput.value;
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+        };
+
+        const submitCommand = () => {
+            if (commandText.value.trim() && !props.isProcessing) {
+                emit('command-created', commandText.value);
+                addToHistory(commandText.value);
+                commandText.value = '';
+                autoResize();
+            }
+        };
+
+        const clearCommand = () => {
+            commandText.value = '';
+            autoResize();
+        };
+
+        const applySuggestion = (suggestion) => {
+            commandText.value += ' ' + suggestion;
+            autoResize();
+        };
+
+        return {
+            commandText,
+            commandInput,
+            suggestions,
+            placeholder,
+            autoResize,
+            submitCommand,
+            clearCommand,
+            applySuggestion
+        };
+    }
+};
+</script>
+
+<style scoped>
+.command-creator {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.command-input {
+    width: 100%;
+    min-height: 100px;
+    resize: vertical;
+    padding: 10px;
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.command-controls {
+    display: flex;
+    gap: 10px;
+}
+
+button {
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+button:hover:not(:disabled) {
+    background-color: #45a049;
+}
+
+button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.command-suggestions {
+    margin-top: 10px;
+}
+
+.command-suggestions ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.command-suggestions li {
+    cursor: pointer;
+    padding: 5px;
+    background-color: #f1f1f1;
+    margin-bottom: 5px;
+    border-radius: 3px;
+}
+
+.command-suggestions li:hover {
+    background-color: #e0e0e0;
+}
+</style>
+
+--- Zawartość pliku: src/components/modulesAI/CommandEnhancer.js ---
+// src/components/modulesAI/CommandEnhancer.js
+import { analyzeIntent } from '@/utils/intentAnalysis';
+import { getModelCapabilities } from '@/utils/modelInfo';
+
+export function enhanceCommand(command, options = {}) {
+  const intent = analyzeIntent(command);
+  const modelCapabilities = getModelCapabilities(options.model);
+
+  let enhancedCommand = `[ENHANCED COMMAND]\n${command}\n\n`;
+
+  // Dodanie walidacji, aby unikać nadmiarowych operacji
+  if (!intent || !modelCapabilities) {
+    return enhancedCommand;
+  }
+
+  enhancedCommand += `Intent: ${intent}\n`;
+  enhancedCommand += `Model: ${options.model}\n`;
+  enhancedCommand += `Max Tokens: ${options.maxTokens}\n`;
+  enhancedCommand += `Temperature: ${options.temperature}\n\n`;
+
+  if (modelCapabilities.includes('codeGeneration') && intent.includes('code')) {
+    enhancedCommand += `[CODE GENERATION GUIDELINES]\n`;
+    enhancedCommand += `- Use best practices for the target language\n`;
+    enhancedCommand += `- Include comprehensive comments\n`;
+    enhancedCommand += `- Optimize for readability and efficiency\n\n`;
+  }
+
+  if (modelCapabilities.includes('dataAnalysis') && intent.includes('analyze')) {
+    enhancedCommand += `[DATA ANALYSIS REQUIREMENTS]\n`;
+    enhancedCommand += `- Provide detailed statistical summaries\n`;
+    enhancedCommand += `- Include data visualization suggestions\n`;
+    enhancedCommand += `- Highlight key insights and anomalies\n\n`;
+  }
+
+  enhancedCommand += `[ADDITIONAL CONTEXT]\n`;
+  enhancedCommand += `- Consider recent developments in the field\n`;
+  enhancedCommand += `- Provide multiple perspectives if applicable\n`;
+  enhancedCommand += `- Suggest follow-up questions or areas for further exploration\n`;
+
+  return enhancedCommand;
+}
+
+
+--- Zawartość pliku: src/components/modulesAI/CommandEvaluator.js ---
+// src/components/modulesAI/CommandEvaluator.js
+import { tokenize } from '@/utils/tokenizer';
+import { analyzeComplexity } from '@/utils/complexityAnalysis';
+
+export function evaluateCommand(command, model) {
+  const tokens = tokenize(command); // Tokenizacja komendy
+  const complexity = analyzeComplexity(command); // Analiza złożoności komendy
+
+  // Utworzenie obiektu oceny komendy
+  const evaluation = {
+    tokenCount: tokens.length, // Liczba tokenów
+    complexity: complexity, // Złożoność komendy (np. 'Low', 'Medium', 'High')
+    suitability: calculateSuitability(tokens.length, complexity, model), // Ocena dopasowania do modelu
+    suggestions: [] // Lista sugestii dotyczących polecenia
+  };
+
+  // Dodano ograniczenia tokenów na początku, aby uniknąć dalszych niepotrzebnych operacji
+  if (evaluation.tokenCount > getModelMaxTokens(model)) {
+    evaluation.suggestions.push('Consider shortening the command to fit within model token limits.');
+    return evaluation;
+  }
+
+  // Sugestie związane z wyborem modelu na podstawie złożoności komendy
+  if (evaluation.complexity === 'Low' && model.includes('gpt-4')) {
+    evaluation.suggestions.push('This command might be better suited for a simpler model like GPT-3.5-turbo.');
+  }
+
+  if (evaluation.complexity === 'High' && !model.includes('gpt-4')) {
+    evaluation.suggestions.push('Consider using a more advanced model like GPT-4 for this complex query.');
+  }
+
+  return evaluation;
+}
+
+// Funkcja do obliczania dopasowania polecenia do modelu
+function calculateSuitability(tokenCount, complexity, model) {
+  const maxTokens = getModelMaxTokens(model); // Pobieranie maksymalnej liczby tokenów dla modelu
+  let suitability = 1; // Domyślna wartość dopasowania
+
+  // Obniżanie dopasowania na podstawie liczby tokenów
+  if (tokenCount > maxTokens * 0.75) {
+    suitability *= 0.75; // Jeśli tokeny przekraczają 75% limitu, obniżenie oceny
+  } else if (tokenCount > maxTokens * 0.5) {
+    suitability *= 0.85; // Jeśli tokeny przekraczają 50% limitu, lekkie obniżenie oceny
+  }
+
+  // Obniżanie dopasowania na podstawie złożoności
+  if (complexity === 'High' && !model.includes('gpt-4')) {
+    suitability *= 0.5; // Jeśli złożoność wysoka, a model nie jest GPT-4, znaczące obniżenie oceny
+  } else if (complexity === 'Low' && model.includes('gpt-4')) {
+    suitability *= 0.8; // Jeśli złożoność niska, a model to GPT-4, lekkie obniżenie oceny
+  }
+
+  return suitability; // Zwracanie wartości dopasowania
+}
+
+// Funkcja do pobierania maksymalnej liczby tokenów dla modelu
+function getModelMaxTokens(model) {
+  // Definiowanie maksymalnych tokenów dla popularnych modeli
+  const modelLimits = {
+    'gpt-4': 8000,
+    'gpt-3.5-turbo': 4096,
+    'gpt-3': 2048,
+    'gpt-2': 1024,
+  };
+
+  // Zwracanie limitu dla danego modelu lub domyślnego 2048
+  return modelLimits[model] || 2048;
+}
+
+
+
+--- Zawartość pliku: src/components/modulesAI/CommandGenerator.js ---
+// src/components/modulesAI/CommandGenerator.js
+import { analyzeIntent } from './IntentAnalyzer';
+import { getModelCapabilities } from './ModelAnalyzer';
+
+export function generateCommand(baseCommand, options = {}) {
+  const intent = analyzeIntent(baseCommand);
+  const modelCapabilities = getModelCapabilities(options.model);
+
+  let enhancedCommand = `[INTENT: ${intent}]\n${baseCommand}\n\n`;
+
+  enhancedCommand += `[CONTEXT]\n`;
+  enhancedCommand += `- Model: ${options.model}\n`;
+  enhancedCommand += `- Max Tokens: ${options.maxTokens}\n`;
+  enhancedCommand += `- Temperature: ${options.temperature}\n`;
+
+  if (modelCapabilities.includes('codeGeneration') && intent.includes('code')) {
+    enhancedCommand += `\n[CODE GENERATION GUIDELINES]\n`;
+    enhancedCommand += `- Use best practices for the target language\n`;
+    enhancedCommand += `- Include comments explaining complex logic\n`;
+    enhancedCommand += `- Optimize for readability and efficiency\n`;
+  }
+
+  if (modelCapabilities.includes('dataAnalysis') && intent.includes('analyze')) {
+    enhancedCommand += `\n[DATA ANALYSIS REQUIREMENTS]\n`;
+    enhancedCommand += `- Provide statistical summaries where relevant\n`;
+    enhancedCommand += `- Include visualizations suggestions if applicable\n`;
+    enhancedCommand += `- Highlight key insights and anomalies\n`;
+  }
+
+  enhancedCommand += `\n[OUTPUT FORMAT]\n`;
+  enhancedCommand += `- Structure the response clearly with headings and subheadings\n`;
+  enhancedCommand += `- Use markdown formatting for improved readability\n`;
+  enhancedCommand += `- Summarize key points at the end\n`;
+
+  return enhancedCommand;
+}
+
+--- Zawartość pliku: src/components/modulesAI/CommandHistory.js ---
+// src/components/modulesAI/CommandHistory.js
+const MAX_HISTORY_LENGTH = 50;
+
+let commandHistory = JSON.parse(localStorage.getItem('commandHistory')) || [];
+
+export function saveCommand(command, response) {
+  const entry = {
+    command,
+    response,
+    date: new Date().toISOString(),
+    modelUsed: command.includes('GPT-4') ? 'GPT-4' : 'GPT-3.5-Turbo',
+  };
+
+  commandHistory.unshift(entry);
+
+  if (commandHistory.length > MAX_HISTORY_LENGTH) {
+    commandHistory = commandHistory.slice(0, MAX_HISTORY_LENGTH);
+  }
+
+  localStorage.setItem('commandHistory', JSON.stringify(commandHistory));
+}
+
+export function getCommandHistory() {
+  return commandHistory;
+}
+
+export function clearCommandHistory() {
+  commandHistory = [];
+  localStorage.removeItem('commandHistory');
+}
+
+export function analyzeHistory() {
+  const modelUsageStats = commandHistory.reduce((acc, entry) => {
+    acc[entry.modelUsed] = (acc[entry.modelUsed] || 0) + 1;
+    return acc;
+  }, {});
+
+  return {
+    totalCommands: commandHistory.length,
+    modelUsageStats,
+    commandHistory,
+  };
+}
+
+
+--- Zawartość pliku: src/components/modulesAI/CommandInput.vue ---
+<template>
+  <div class="command-input">
+    <div class="input-container">
+      <textarea
+        v-model="localCommand"
+        @input="updateCommand"
+        :placeholder="placeholder"
+        :disabled="disabled"
+        class="command-textarea"
+        ref="textarea"
+      ></textarea>
+      <div class="input-actions">
+        <button @click="clearCommand" :disabled="disabled || !localCommand" class="clear-button">
+          Clear
+        </button>
+        <button @click="pasteFromClipboard" :disabled="disabled" class="paste-button">
+          Paste
+        </button>
+      </div>
+    </div>
+    <div class="command-options">
+      <div class="option">
+        <label for="maxTokens">Max Tokens:</label>
+        <input 
+          type="number" 
+          id="maxTokens" 
+          v-model.number="localMaxTokens" 
+          @input="updateMaxTokens"
+          :min="1"
+          :max="maxTokensLimit"
+        >
+      </div>
+      <div class="option">
+        <label for="temperature">Temperature:</label>
+        <input 
+          type="range" 
+          id="temperature" 
+          v-model.number="localTemperature" 
+          @input="updateTemperature"
+          min="0"
+          max="1"
+          step="0.1"
+        >
+        <span>{{ localTemperature.toFixed(1) }}</span>
+      </div>
+    </div>
+    <div v-if="suggestions.length > 0" class="suggestions">
+      <h4>Suggestions:</h4>
+      <ul>
+        <li v-for="suggestion in suggestions" :key="suggestion" @click="applySuggestion(suggestion)">
+          {{ suggestion }}
+        </li>
+      </ul>
+    </div>
+  </div>
+</template>
+
+<script>
+import { ref, watch, onMounted } from 'vue';
+import { useAIStore } from '@/stores/aiStore';
+
+export default {
+  name: 'CommandInput',
+  props: {
+    command: {
+      type: String,
+      default: ''
+    },
+    maxTokens: {
+      type: Number,
+      default: 1000
+    },
+    temperature: {
+      type: Number,
+      default: 0.7
+    },
+    disabled: {
+      type: Boolean,
+      default: false
+    },
+    placeholder: {
+      type: String,
+      default: 'Enter your command here...'
+    }
+  },
+  emits: ['update:command', 'update:maxTokens', 'update:temperature'],
+  setup(props, { emit }) {
+    const aiStore = useAIStore();
+    const textarea = ref(null);
+    const localCommand = ref(props.command);
+    const localMaxTokens = ref(props.maxTokens);
+    const localTemperature = ref(props.temperature);
+    const suggestions = ref([]);
+    const maxTokensLimit = 4096; // Adjust based on the model's actual limit
+
+    const updateCommand = () => {
+      emit('update:command', localCommand.value);
+      generateSuggestions();
+    };
+
+    const updateMaxTokens = () => {
+      emit('update:maxTokens', localMaxTokens.value);
+    };
+
+    const updateTemperature = () => {
+      emit('update:temperature', localTemperature.value);
+    };
+
+    const clearCommand = () => {
+      localCommand.value = '';
+      updateCommand();
+    };
+
+    const pasteFromClipboard = async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        localCommand.value = text;
+        updateCommand();
+      } catch (err) {
+        console.error('Failed to read clipboard contents: ', err);
+      }
+    };
+
+    const generateSuggestions = async () => {
+      if (localCommand.value.length > 10) {
+        suggestions.value = await aiStore.generateSuggestions(localCommand.value);
+      } else {
+        suggestions.value = [];
+      }
+    };
+
+    const applySuggestion = (suggestion) => {
+      localCommand.value += ' ' + suggestion;
+      updateCommand();
+    };
+
+    const adjustTextareaHeight = () => {
+      const element = textarea.value;
+      element.style.height = 'auto';
+      element.style.height = `${element.scrollHeight}px`;
+    };
+
+    watch(() => props.command, (newValue) => {
+      localCommand.value = newValue;
+    });
+
+    onMounted(() => {
+      adjustTextareaHeight();
+    });
+
+    watch(localCommand, () => {
+      adjustTextareaHeight();
+    });
+
+    return {
+      localCommand,
+      localMaxTokens,
+      localTemperature,
+      suggestions,
+      maxTokensLimit,
+      textarea,
+      updateCommand,
+      updateMaxTokens,
+      updateTemperature,
+      clearCommand,
+      pasteFromClipboard,
+      applySuggestion
+    };
+  }
+};
+</script>
+
+<style scoped>
+.command-input {
+  margin-bottom: 20px;
+}
+
+.input-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.command-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 16px;
+  resize: vertical;
+}
+
+.input-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.clear-button,
+.paste-button {
+  margin-left: 10px;
+  padding: 5px 10px;
+  background-color: #f0f0f0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.clear-button:hover,
+.paste-button:hover {
+  background-color: #e0e0e0;
+}
+
+.command-options {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+}
+
+.option label {
+  margin-right: 10px;
+}
+
+.option input[type="number"],
+.option input[type="range"] {
+  width: 100px;
+}
+
+.suggestions {
+  margin-top: 10px;
+}
+
+.suggestions ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+.suggestions li {
+  cursor: pointer;
+  padding: 5px;
+  background-color: #f0f0f0;
+  margin-bottom: 5px;
+  border-radius: 4px;
+}
+
+.suggestions li:hover {
+  background-color: #e0e0e0;
+}
+</style>
+
+--- Zawartość pliku: src/components/modulesAI/CommandOptimizer.js ---
+// src/components/modulesAI/CommandOptimizer.js
+import { tokenize } from './Tokenizer';
+import { removeDuplicates } from './TextProcessor';
+
+export function optimizeCommand(command) {
+  let optimizedCommand = command;
+
+  // Remove redundant whitespace
+  optimizedCommand = optimizedCommand.replace(/\s+/g, ' ').trim();
+
+  // Remove duplicate instructions
+  optimizedCommand = removeDuplicates(optimizedCommand);
+
+  // Ensure the command is within token limits
+  const tokens = tokenize(optimizedCommand);
+  if (tokens.length > 4000) {
+    optimizedCommand = truncateToTokenLimit(optimizedCommand, 4000);
+  }
+
+  // Add clarity improvements
+  optimizedCommand = addClarityImprovements(optimizedCommand);
+
+  return optimizedCommand;
+}
+
+function truncateToTokenLimit(command, limit) {
+  const tokens = tokenize(command);
+  return tokens.slice(0, limit).join(' ');
+}
+
+function addClarityImprovements(command) {
+  // Add specific clarity improvements based on command content
+  // This is a placeholder for more advanced logic
+  return `[OPTIMIZED]\n${command}\n[END OPTIMIZED]`;
+}
+
+--- Zawartość pliku: src/components/modulesAI/ComparisonTable.vue ---
+<template>
+    <div class="comparison-table">
+      <h2>{{ title }}</h2>
+      
+      <!-- Wyszukiwarka -->
+      <div class="search-bar">
+        <input
+          v-model="searchQuery"
+          type="text"
+          :placeholder="$t('table.searchPlaceholder')"
+          class="search-input"
+        />
+      </div>
+  
+      <!-- Tabela -->
+      <table class="table">
+        <thead>
+          <tr>
+            <th v-for="(header, index) in headers" :key="index" @click="sortTable(index)">
+              {{ header }}
+              <span v-if="sortedColumn === index">
+                <span v-if="isAscending">▲</span>
+                <span v-else>▼</span>
+              </span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(row, rowIndex) in filteredRows" :key="rowIndex">
+            <td v-for="(cell, cellIndex) in row" :key="cellIndex">
+              {{ formatCell(cell, cellIndex) }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+  
+      <!-- Paginacja -->
+      <div class="pagination">
+        <button @click="prevPage" :disabled="currentPage === 1">
+          {{ $t('table.prev') }}
+        </button>
+        <span>{{ currentPage }} / {{ totalPages }}</span>
+        <button @click="nextPage" :disabled="currentPage === totalPages">
+          {{ $t('table.next') }}
+        </button>
+      </div>
+    </div>
+  </template>
+  
+  <script>
+  export default {
+    name: 'ComparisonTable',
+    props: {
+      title: {
+        type: String,
+        default: 'Comparison Table',
+      },
+      headers: {
+        type: Array,
+        default: () => ['Column 1', 'Column 2', 'Column 3'],
+      },
+      rows: {
+        type: Array,
+        default: () => [
+          ['Data 1', 'Data 2', 'Data 3'],
+          ['Data 4', 'Data 5', 'Data 6'],
+          // więcej danych
+        ],
+      },
+      itemsPerPage: {
+        type: Number,
+        default: 10,
+      },
+    },
+    data() {
+      return {
+        searchQuery: '',
+        currentPage: 1,
+        sortedColumn: null,
+        isAscending: true,
+      };
+    },
+    computed: {
+      filteredRows() {
+        // Filtracja wyników na podstawie zapytania wyszukiwania
+        let filtered = this.rows.filter((row) => {
+          return row.some((cell) =>
+            String(cell).toLowerCase().includes(this.searchQuery.toLowerCase())
+          );
+        });
+  
+        // Sortowanie
+        if (this.sortedColumn !== null) {
+          filtered.sort((a, b) => {
+            const cellA = a[this.sortedColumn];
+            const cellB = b[this.sortedColumn];
+  
+            if (this.isAscending) {
+              return cellA > cellB ? 1 : -1;
+            } else {
+              return cellA < cellB ? 1 : -1;
+            }
+          });
+        }
+  
+        // Paginacja
+        return filtered.slice(
+          (this.currentPage - 1) * this.itemsPerPage,
+          this.currentPage * this.itemsPerPage
+        );
+      },
+      totalPages() {
+        return Math.ceil(this.rows.length / this.itemsPerPage);
+      },
+    },
+    methods: {
+      formatCell(cell, cellIndex) {
+        // Możesz tutaj dodać bardziej zaawansowaną logikę formatowania
+        return cell;
+      },
+      sortTable(columnIndex) {
+        if (this.sortedColumn === columnIndex) {
+          this.isAscending = !this.isAscending;
+        } else {
+          this.sortedColumn = columnIndex;
+          this.isAscending = true;
+        }
+      },
+      nextPage() {
+        if (this.currentPage < this.totalPages) {
+          this.currentPage += 1;
+        }
+      },
+      prevPage() {
+        if (this.currentPage > 1) {
+          this.currentPage -= 1;
+        }
+      },
+    },
+  };
+  </script>
+  
+  <style scoped>
+  .comparison-table {
+    width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  
+  .search-bar {
+    margin-bottom: 10px;
+  }
+  
+  .search-input {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+  }
+  
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+  }
+  
+  .table th {
+    cursor: pointer;
+    padding: 10px;
+    background-color: #f0f0f0;
+  }
+  
+  .table td {
+    padding: 10px;
+    border: 1px solid #ccc;
+  }
+  
+  .pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+  }
+  
+  .pagination button {
+    padding: 5px 10px;
+  }
+  </style>
+  
+
+--- Zawartość pliku: src/components/modulesAI/ErrorLog.vue ---
+<template>
+    <div class="error-log">
+      <h5>Errors:</h5>
+      <ul>
+        <li v-for="(error, index) in errors" :key="'error-'+index">{{ error }}</li>
+      </ul>
+      <h5>Warnings:</h5>
+      <ul>
+        <li v-for="(warning, index) in warnings" :key="'warning-'+index">{{ warning }}</li>
+      </ul>
+    </div>
+  </template>
+  
+  <script>
+  export default {
+    name: 'ErrorLog',
+    props: {
+      errors: Array,
+      warnings: Array
+    }
+  }
+  </script>
+
+--- Zawartość pliku: src/components/modulesAI/ExportManager.js ---
+// src/components/modulesAI/ExportManager.js
+import { saveAs } from 'file-saver';
+import pdfMake from 'pdfmake/build/pdfmake';
+
+export function exportData(data, format, filename) {
+  switch (format) {
+    case 'json':
+      exportToJSON(data, filename);
+      break;
+    case 'csv':
+      exportToCSV(data, filename);
+      break;
+    case 'pdf':
+      exportToPDF(data, filename);
+      break;
+    default:
+      console.error(`Unsupported format: ${format}`);
+  }
+}
+
+function exportToJSON(data, filename = 'export.json') {
+  const jsonStr = JSON.stringify(data, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  saveAs(blob, filename);
+}
+
+function exportToCSV(data, filename = 'export.csv') {
+  const csvContent = convertToCSV(data);
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  saveAs(blob, filename);
+}
+
+function exportToPDF(data, filename = 'export.pdf') {
+  const docDefinition = {
+    content: [
+      { text: 'Data Export', style: 'header' },
+      { text: JSON.stringify(data, null, 2), style: 'content' },
+    ],
+  };
+  pdfMake.createPdf(docDefinition).download(filename);
+}
+
+function convertToCSV(objArray) {
+  const array = typeof objArray !== 'object' ? JSON.parse(objArray) : objArray;
+  let str = '';
+  for (let i = 0; i < array.length; i++) {
+    let line = '';
+    for (const index in array[i]) {
+      if (line !== '') line += ',';
+      line += array[i][index];
+    }
+    str += line + '\r\n';
+  }
+  return str;
+}
+
+
+--- Zawartość pliku: src/components/modulesAI/HistoryAnalysis.vue ---
+<template>
+    <div class="history-analysis">
+      <h3>Advanced History Analysis</h3>
+      <div v-if="analysisData" class="analysis-content">
+        <div class="metrics">
+          <div class="metric">
+            <h4>Total Commands</h4>
+            <p>{{ analysisData.totalCommands }}</p>
+          </div>
+          <div class="metric">
+            <h4>Average Response Time</h4>
+            <p>{{ formatTime(analysisData.averageResponseTime) }}</p>
+          </div>
+          <div class="metric">
+            <h4>Most Used Model</h4>
+            <p>{{ analysisData.mostUsedModel }}</p>
+          </div>
+        </div>
+  
+        <div class="charts">
+          <div class="chart">
+            <h4>Topic Distribution</h4>
+            <pie-chart :chart-data="topicChartData" />
+          </div>
+          <div class="chart">
+            <h4>Command Length Distribution</h4>
+            <bar-chart :chart-data="commandLengthChartData" />
+          </div>
+        </div>
+  
+        <div class="advanced-metrics">
+          <h4>Advanced Metrics</h4>
+          <ul>
+            <li>Complexity Trend: {{ analysisData.complexityTrend }}</li>
+            <li>User Engagement Score: {{ analysisData.userEngagementScore.toFixed(2) }}</li>
+            <li>AI Performance Index: {{ analysisData.aiPerformanceIndex.toFixed(2) }}</li>
+          </ul>
+        </div>
+  
+        <div class="time-series">
+          <h4>Command Frequency Over Time</h4>
+          <line-chart :chart-data="timeSeriesChartData" />
+        </div>
+      </div>
+      <p v-else>No analysis data available. Start interacting with the AI to generate insights.</p>
+    </div>
+  </template>
+  
+  <script>
+  import { ref, computed, onMounted, watch } from 'vue';
+  import { useAIStore } from '@/stores/aiStore';
+  import PieChart from '@/components/charts/PieChart.vue';
+  import BarChart from '@/components/charts/BarChart.vue';
+  import LineChart from '@/components/charts/LineChart.vue';
+  
+  export default {
+    name: 'HistoryAnalysis',
+    components: {
+      PieChart,
+      BarChart,
+      LineChart,
+    },
+    props: {
+      analysisData: {
+        type: Object,
+        default: () => null,
+      },
+    },
+    setup(props) {
+      const aiStore = useAIStore();
+      const localAnalysisData = ref(null);
+  
+      const topicChartData = computed(() => ({
+        labels: Object.keys(props.analysisData?.topTopics || {}),
+        datasets: [
+          {
+            data: Object.values(props.analysisData?.topTopics || {}),
+            backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'],
+          },
+        ],
+      }));
+  
+      const commandLengthChartData = computed(() => ({
+        labels: ['0-50', '51-100', '101-200', '201+'],
+        datasets: [
+          {
+            label: 'Command Length Distribution',
+            data: props.analysisData?.commandLengthDistribution || [0, 0, 0, 0],
+            backgroundColor: '#36A2EB',
+          },
+        ],
+      }));
+  
+      const timeSeriesChartData = computed(() => ({
+        labels: props.analysisData?.timeSeriesData?.map((d) => d.date) || [],
+        datasets: [
+          {
+            label: 'Commands per Day',
+            data: props.analysisData?.timeSeriesData?.map((d) => d.count) || [],
+            borderColor: '#4BC0C0',
+            fill: false,
+          },
+        ],
+      }));
+  
+      const formatTime = (time) => {
+        return time ? `${time.toFixed(2)}ms` : 'N/A';
+      };
+  
+      onMounted(async () => {
+        if (!props.analysisData) {
+          localAnalysisData.value = await aiStore.generateHistoryAnalysis();
+        }
+      });
+  
+      watch(() => props.analysisData, (newData) => {
+        if (newData) {
+          localAnalysisData.value = newData;
+        }
+      });
+  
+      return {
+        localAnalysisData,
+        topicChartData,
+        commandLengthChartData,
+        timeSeriesChartData,
+        formatTime,
+      };
+    },
+  };
+  </script>
+  
+  <style scoped>
+  .history-analysis {
+    background-color: var(--card-bg-color);
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  h3,
+  h4 {
+    color: var(--heading-color);
+    margin-bottom: 15px;
+  }
+  
+  .analysis-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+  }
+  
+  .metrics {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  
+  .metric {
+    background-color: var(--metric-bg-color);
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    flex: 1;
+    margin: 5px;
+  }
+  
+  .charts {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .chart {
+    background-color: var(--chart-bg-color);
+    padding: 15px;
+    border-radius: 8px;
+  }
+  
+  .advanced-metrics ul {
+    list-style-type: none;
+    padding: 0;
+  }
+  
+  .advanced-metrics li {
+    margin-bottom: 10px;
+    padding: 10px;
+    background-color: var(--metric-bg-color);
+    border-radius: 4px;
+  }
+  
+  .time-series {
+    grid-column: 1 / -1;
+  }
+  
+  @media (max-width: 768px) {
+    .analysis-content {
+      grid-template-columns: 1fr;
+    }
+  }
+  </style>
+  
+
+--- Zawartość pliku: src/components/modulesAI/InfoTooltip.vue ---
+<template>
+  <span class="info-tooltip">
+    <i class="pi pi-info-circle" v-tooltip.bottom="text"></i>
+  </span>
+</template>
+
+<script>
+import { defineComponent } from 'vue';
+import Tooltip from 'primevue/tooltip';
+
+export default defineComponent({
+  name: 'InfoTooltip',
+  directives: {
+    tooltip: Tooltip
+  },
+  props: {
+    text: {
+      type: String,
+      required: true
+    }
+  }
+});
+</script>
+
+<style scoped>
+.info-tooltip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 5px;
+  cursor: help;
+}
+
+.info-tooltip i {
+  font-size: 16px;
+  color: var(--text-color);
+}
+
+:deep(.p-tooltip .p-tooltip-text) {
+  background-color: var(--card-bg-dark);
+  color: var(--text-dark);
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+</style>
+
+
+--- Zawartość pliku: src/components/modulesAI/IntentAnalyzer.js ---
+import { tokenize } from '@/utils/tokenizer';
+import { analyzeComplexity } from '@/utils/complexityAnalysis';
+
+export function analyzeIntent(command) {
+  const tokens = tokenize(command);
+  const complexity = analyzeComplexity(command);
+
+  const intents = {
+    CODE_GENERATION: /\b(generate|create|write|implement)\s+(code|function|class|module)\b/i,
+    DATA_ANALYSIS: /\b(analyze|examine|investigate|study)\s+(data|information|statistics)\b/i,
+    SUMMARIZATION: /\b(summarize|summarise|recap|condense)\b/i,
+    TRANSLATION: /\b(translate|convert)\s+(\w+)\s+to\s+(\w+)\b/i,
+    EXPLANATION: /\b(explain|clarify|elucidate)\b/i,
+    CREATIVE_WRITING: /\b(write|compose|create)\s+(story|poem|article|essay)\b/i,
+  };
+
+  let detectedIntent = 'GENERAL_QUERY';
+  for (const [intent, regex] of Object.entries(intents)) {
+    if (regex.test(command)) {
+      detectedIntent = intent;
+      break;
+    }
+  }
+
+  return {
+    intent: detectedIntent,
+    complexity,
+    tokenCount: tokens.length,
+    topKeywords: extractTopKeywords(tokens),
+  };
+}
+
+function extractTopKeywords(tokens, topN = 5) {
+  const keywordCounts = tokens.reduce((acc, token) => {
+    acc[token] = (acc[token] || 0) + 1;
+    return acc;
+  }, {});
+
+  return Object.entries(keywordCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([keyword]) => keyword);
+}
+
+--- Zawartość pliku: src/components/modulesAI/InteractiveExamples.vue ---
+<template>
+  <div class="interactive-examples">
+    <h3>Interactive Examples</h3>
+    <div v-for="(example, index) in examples" :key="index" class="example">
+      <h4>{{ example.title }}</h4>
+      <p>{{ example.description }}</p>
+      <div class="code-container">
+        <pre><code>{{ example.code }}</code></pre>
+        <button @click="runExample(index)">Run</button>
+      </div>
+      <div v-if="example.result" class="result">
+        <h5>Result:</h5>
+        <pre>{{ example.result }}</pre>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import { ref } from 'vue';
+
+export default {
+  name: 'InteractiveExamples',
+  props: {
+    initialExamples: {
+      type: Array,
+      default: () => []
+    }
+  },
+  setup(props) {
+    const examples = ref(props.initialExamples);
+
+    const runExample = async (index) => {
+      const example = examples.value[index];
+      try {
+        // Bezpieczne wykonanie kodu za pomocą funkcji `new Function()`
+        const func = new Function(example.code);
+        const result = await func(); // Uruchomienie kodu
+        example.result = JSON.stringify(result, null, 2); // Formatowanie wyniku
+      } catch (error) {
+        example.result = `Error: ${error.message}`; // Obsługa błędów
+      }
+    };
+
+    return {
+      examples,
+      runExample
+    };
+  }
+};
+</script>
+
+<style scoped>
+.interactive-examples {
+  margin-top: 20px;
+}
+
+.example {
+  margin-bottom: 20px;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+
+.code-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: 10px;
+}
+
+pre {
+  background-color: #f4f4f4;
+  padding: 10px;
+  border-radius: 5px;
+  overflow-x: auto;
+}
+
+button {
+  padding: 5px 10px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #45a049;
+}
+
+.result {
+  margin-top: 10px;
+  background-color: #e9f7ef;
+  padding: 10px;
+  border-radius: 5px;
+}
+</style>
+
+
+--- Zawartość pliku: src/components/modulesAI/LanguageSelector.vue ---
+<template>
+    <div class="language-selector">
+        <label :for="id">{{ label }}</label>
+        <select :id="id" v-model="selectedLanguage" @change="emitChange">
+            <option v-for="lang in languages" :key="lang.code" :value="lang.code">
+                {{ lang.name }}
+            </option>
+        </select>
+    </div>
+</template>
+
+<script>
+import { ref, watch } from 'vue';
+
+export default {
+    name: 'LanguageSelector',
+    props: {
+        modelValue: {
+            type: String,
+            required: true
+        },
+        label: {
+            type: String,
+            default: 'Select Language'
+        }
+    },
+    emits: ['update:modelValue'],
+    setup(props, { emit }) {
+        // Unikalny identyfikator dla elementu select
+        const id = `language-selector-${Math.random().toString(36).substr(2, 9)}`;
+        const selectedLanguage = ref(props.modelValue);
+
+        // Lista dostępnych języków
+        const languages = [
+            { code: 'en', name: 'English' },
+            { code: 'es', name: 'Spanish' },
+            { code: 'fr', name: 'French' },
+            { code: 'de', name: 'German' },
+            { code: 'it', name: 'Italian' },
+            { code: 'pt', name: 'Portuguese' },
+            { code: 'ru', name: 'Russian' },
+            { code: 'zh', name: 'Chinese' },
+            { code: 'ja', name: 'Japanese' },
+            { code: 'ko', name: 'Korean' }
+        ];
+
+        // Funkcja emitująca zmianę wybranego języka
+        const emitChange = () => {
+            emit('update:modelValue', selectedLanguage.value);
+        };
+
+        // Aktualizacja lokalnej zmiennej, gdy modelValue się zmienia
+        watch(() => props.modelValue, (newValue) => {
+            selectedLanguage.value = newValue;
+        });
+
+        return {
+            id,
+            selectedLanguage,
+            languages,
+            emitChange
+        };
+    }
+};
+</script>
+
+<style scoped>
+.language-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+label {
+    font-size: 14px;
+    color: #333;
+}
+
+select {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+    background-color: white;
+    cursor: pointer;
+}
+
+select:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+</style>
+
+
+--- Zawartość pliku: src/components/modulesAI/LanguageTranslator.vue ---
+<template>
+  <div class="language-translator">
+    <div class="translator-header">
+      <h3>AI-Powered Language Translator</h3>
+      <LanguageSelector v-model="sourceLanguage" label="From" />
+      <button @click="swapLanguages" class="swap-btn">
+        <i class="fas fa-exchange-alt"></i>
+      </button>
+      <LanguageSelector v-model="targetLanguage" label="To" />
+    </div>
+
+    <div class="translator-body">
+      <div class="input-section">
+        <textarea
+          v-model="sourceText"
+          @input="handleInput"
+          placeholder="Enter text to translate"
+          :disabled="isTranslating"
+        ></textarea>
+        <div class="text-controls">
+          <button @click="clearText" :disabled="!sourceText">Clear</button>
+          <button @click="pasteText" :disabled="isTranslating">Paste</button>
+          <button @click="speakText(sourceText, sourceLanguage)" :disabled="!sourceText">
+            <i class="fas fa-volume-up"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="output-section">
+        <div class="translation-result" v-if="translatedText">
+          {{ translatedText }}
+        </div>
+        <div class="placeholder" v-else>
+          Translation will appear here
+        </div>
+        <div class="text-controls">
+          <button @click="copyTranslation" :disabled="!translatedText">Copy</button>
+          <button @click="speakText(translatedText, targetLanguage)" :disabled="!translatedText">
+            <i class="fas fa-volume-up"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="translator-footer">
+      <div class="confidence-meter" v-if="translationConfidence">
+        <span>Translation Confidence:</span>
+        <progress :value="translationConfidence" max="100"></progress>
+        <span>{{ translationConfidence }}%</span>
+      </div>
+      <div class="translation-stats" v-if="characterCount">
+        <span>Characters: {{ characterCount }}</span>
+        <span>Words: {{ wordCount }}</span>
+      </div>
+    </div>
+
+    <TranslationHistory
+      :history="translationHistory"
+      @select-translation="selectHistoryItem"
+    />
+  </div>
+</template>
+
+<script>
+import { ref, computed, watch } from 'vue';
+import LanguageSelector from './LanguageSelector.vue';
+import TranslationHistory from './TranslationHistory.vue';
+import { useTranslationStore } from '@/stores/translationStore';
+import { useClipboard } from '@vueuse/core';
+import { debounce } from 'lodash-es';
+
+export default {
+  name: 'LanguageTranslator',
+  components: {
+    LanguageSelector,
+    TranslationHistory,
+  },
+  setup() {
+    const translationStore = useTranslationStore();
+    const { copy, copied } = useClipboard();
+
+    const sourceLanguage = ref('en');
+    const targetLanguage = ref('es');
+    const sourceText = ref('');
+    const translatedText = ref('');
+    const isTranslating = ref(false);
+    const translationConfidence = ref(null);
+
+    const characterCount = computed(() => sourceText.value.length);
+    const wordCount = computed(() => sourceText.value.trim().split(/\s+/).length);
+
+    const translationHistory = computed(() => translationStore.getHistory);
+
+    const translate = debounce(async () => {
+      if (!sourceText.value.trim()) return;
+
+      isTranslating.value = true;
+      try {
+        const result = await translationStore.translateText({
+          text: sourceText.value,
+          from: sourceLanguage.value,
+          to: targetLanguage.value,
+        });
+        translatedText.value = result.translatedText;
+        translationConfidence.value = result.confidence;
+      } catch (error) {
+        console.error('Translation error:', error);
+      } finally {
+        isTranslating.value = false;
+      }
+    }, 300);
+
+    const handleInput = () => {
+      translate();
+    };
+
+    const swapLanguages = () => {
+      [sourceLanguage.value, targetLanguage.value] = [targetLanguage.value, sourceLanguage.value];
+      translate();
+    };
+
+    const clearText = () => {
+      sourceText.value = '';
+      translatedText.value = '';
+    };
+
+    const pasteText = async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        sourceText.value = text;
+        translate();
+      } catch (error) {
+        console.error('Failed to read clipboard contents:', error);
+      }
+    };
+
+    const copyTranslation = async () => {
+      await copy(translatedText.value);
+      if (copied.value) {
+        // Show success notification
+      }
+    };
+
+    const speakText = (text, language) => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = language;
+      speechSynthesis.speak(utterance);
+    };
+
+    const selectHistoryItem = (item) => {
+      sourceLanguage.value = item.sourceLanguage;
+      targetLanguage.value = item.targetLanguage;
+      sourceText.value = item.sourceText;
+      translatedText.value = item.translatedText;
+    };
+
+    watch([sourceLanguage, targetLanguage], () => {
+      translate();
+    });
+
+    return {
+      sourceLanguage,
+      targetLanguage,
+      sourceText,
+      translatedText,
+      isTranslating,
+      translationConfidence,
+      characterCount,
+      wordCount,
+      translationHistory,
+      handleInput,
+      swapLanguages,
+      clearText,
+      pasteText,
+      copyTranslation,
+      speakText,
+      selectHistoryItem,
+    };
+  },
+};
+</script>
+
+<style scoped>
+.language-translator {
+  background: #f9f9f9;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.translator-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.swap-btn {
+  background: none;
+  border: none;
+  font-size: 1.2em;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+}
+
+.swap-btn:hover {
+  transform: rotate(180deg);
+}
+
+.translator-body {
+  display: flex;
+  gap: 20px;
+}
+
+.input-section, .output-section {
+  flex: 1;
+}
+
+textarea, .translation-result, .placeholder {
+  width: 100%;
+  min-height: 200px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 16px;
+  resize: vertical;
+}
+
+.text-controls {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.text-controls button {
+  padding: 5px 10px;
+  background: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.text-controls button:hover {
+  background: #45a049;
+}
+
+.text-controls button:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+}
+
+.translator-footer {
+  margin-top: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.confidence-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+progress {
+  width: 100px;
+}
+
+.translation-stats {
+  font-size: 0.9em;
+  color: #666;
+}
+
+@media (max-width: 768px) {
+  .translator-body {
+    flex-direction: column;
+  }
+}
+</style>
+
+
+--- Zawartość pliku: src/components/modulesAI/ModelAnalyzer.js ---
+const modelCapabilities = {
+  'gpt-3.5-turbo': {
+    maxTokens: 4096,
+    capabilities: ['generalQuery', 'codeGeneration', 'summarization'],
+    strengths: ['Fast responses', 'Good for general tasks'],
+    weaknesses: ['Limited context understanding', 'May struggle with complex reasoning'],
+  },
+  'gpt-4': {
+    maxTokens: 8192,
+    capabilities: ['generalQuery', 'codeGeneration', 'dataAnalysis', 'complexReasoning'],
+    strengths: ['Advanced reasoning', 'Better context understanding', 'More coherent long-form content'],
+    weaknesses: ['Slower than GPT-3.5', 'Higher cost'],
+  },
+  'chatgpt-4o-latest': {
+    maxTokens: 128000,
+    capabilities: ['generalQuery', 'codeGeneration', 'dataAnalysis', 'complexReasoning', 'imageProcessing'],
+    strengths: ['Very large context', 'Latest version of the model', 'Multimodal capabilities'],
+    weaknesses: ['Not recommended for production', 'May change without warning'],
+  },
+  'gpt-4o-mini': {
+    maxTokens: 128000,
+    capabilities: ['generalQuery', 'codeGeneration', 'fastProcessing', 'imageProcessing'],
+    strengths: ['Fast responses', 'Low cost', 'Good balance of capability and cost'],
+    weaknesses: ['Less advanced than full GPT-4 models', 'May struggle with highly complex tasks'],
+  },
+};
+
+/**
+ * Retrieves the capabilities and limits of a given model.
+ * @param {string} model - The name of the model.
+ * @returns {Object} - Capabilities and limits of the model or defaults.
+ */
+export function getModelCapabilities(model) {
+  return modelCapabilities[model] || {
+    maxTokens: 1024,
+    capabilities: ['generalQuery'],
+    strengths: ['Unknown'],
+    weaknesses: ['Unknown'],
+  };
+}
+
+/**
+ * Recommends the most appropriate model based on the intent, complexity, and token count.
+ * @param {string} intent - The intent of the task (e.g., 'CODE_GENERATION', 'DATA_ANALYSIS').
+ * @param {string} complexity - The complexity of the task ('Low', 'Medium', 'High').
+ * @param {number} tokenCount - The number of tokens involved in the task.
+ * @returns {string} - The recommended model name.
+ */
+export function recommendModel(intent, complexity, tokenCount) {
+  if (complexity === 'High' && tokenCount > 4000) {
+    return 'gpt-4';
+  } else if (intent === 'CODE_GENERATION' || intent === 'DATA_ANALYSIS') {
+    return tokenCount > 2000 ? 'gpt-4' : 'gpt-3.5-turbo';
+  } else if (intent === 'GENERAL_QUERY' && complexity === 'Low') {
+    return 'gpt-4o-mini';
+  } else {
+    return 'gpt-3.5-turbo';
+  }
+}
+
+/**
+ * Estimates the cost of a model based on the number of tokens used.
+ * @param {string} model - The name of the model.
+ * @param {number} tokenCount - The number of tokens involved.
+ * @returns {number} - The estimated cost of the operation.
+ */
+export function estimateCost(model, tokenCount) {
+  const costPerToken = {
+    'gpt-3.5-turbo': 0.000002,
+    'gpt-4': 0.00003,
+    'chatgpt-4o-latest': 0.00005, // Example price, adjust as needed
+    'gpt-4o-mini': 0.000001, // Example price, adjust as needed
+  };
+
+  return (costPerToken[model] || 0) * tokenCount;
+}
+
+
+--- Zawartość pliku: src/components/modulesAI/ModelInternalsVisualizer.vue ---
+<template> 
+  <div class="model-internals-visualizer">
+    <h3>Model Internals Visualizer</h3>
+    <div v-if="internalState">
+      <div v-for="(value, key) in internalState" :key="key" class="internal-item">
+        <strong>{{ key }}:</strong> <span>{{ formatValue(value) }}</span>
+      </div>
+    </div>
+    <div v-else>
+      <p>No internal state data available.</p>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'ModelInternalsVisualizer',
+  props: {
+    internalState: {
+      type: Object,
+      required: true // Ensure internalState is passed
+    }
+  },
+  methods: {
+    // Helper method to format values in a user-friendly way
+    formatValue(value) {
+      if (typeof value === 'object' && value !== null) {
+        return JSON.stringify(value, null, 2); // Pretty-print objects and arrays
+      }
+      return value;
+    }
+  }
+};
+</script>
+
+<style scoped>
+.model-internals-visualizer {
+  padding: 20px;
+  background-color: var(--surface-a);
+  border-radius: 8px;
+  box-shadow: var(--card-shadow);
+}
+
+h3 {
+  margin-bottom: 15px;
+  color: var(--text-color);
+}
+
+.internal-item {
+  margin-bottom: 10px;
+}
+
+.internal-item strong {
+  color: var(--text-color-secondary);
+}
+</style>
+
+
+--- Zawartość pliku: src/components/modulesAI/ModelSelector.vue ---
+<template>
+  <div class="model-selector" :class="{ 'dark-mode': isDarkMode }">
+    <h3>{{ $t('modelSelector.title') }}</h3>
+
+    <!-- Ładowanie modeli -->
+    <div v-if="loading" class="loading-overlay">
+      <ProgressSpinner />
+    </div>
+
+    <!-- Obsługa błędów -->
+    <div v-else-if="error" class="error-message">
+      {{ error }}
+      <Button :label="$t('common.retry')" icon="pi pi-refresh" @click="retryFetch" />
+    </div>
+
+    <!-- Lista modeli -->
+    <div v-else class="model-list">
+      <TransitionGroup name="model-list" tag="div">
+        <div v-for="model in sortedModels" :key="model.id" class="model-item"
+             :class="{ 'selected': model.id === modelValue }"
+             @click="selectModel(model.id)"
+             :aria-selected="model.id === modelValue"
+             tabindex="0"
+             @keydown.enter="selectModel(model.id)"
+             role="option">
+          <div class="model-icon" :style="{ backgroundColor: model.color }" aria-hidden="true">
+            {{ model.icon }}
+          </div>
+          <div class="model-info">
+            <h4>{{ model.name }}</h4>
+            <p>{{ model.description }}</p>
+            <div class="model-stats">
+              <span>{{ $t('modelSelector.tokens', { count: formatNumber(model.maxTokens) }) }}</span>
+              <span>{{ $t('modelSelector.speed', { speed: model.speed }) }}</span>
+            </div>
+          </div>
+        </div>
+      </TransitionGroup>
+    </div>
+
+    <!-- Porównanie modeli -->
+    <div class="model-comparison">
+      <Button @click="toggleComparison" :label="showComparison ? $t('modelSelector.hideComparison') : $t('modelSelector.showComparison')" />
+    </div>
+    <Modal v-model="showComparison" :title="$t('modelSelector.comparisonTitle')">
+      <ComparisonTable :models="sortedModels" />
+    </Modal>
+  </div>
+</template>
+
+<script>
+import { ref, computed, watch, onMounted } from 'vue';
+import { useModelStore } from '@/stores/modelStore';
+import { storeToRefs } from 'pinia';
+import { useI18n } from 'vue-i18n';
+import Button from 'primevue/button';
+import ProgressSpinner from 'primevue/progressspinner';
+import Modal from '@/components/Modal.vue';
+import ComparisonTable from './ComparisonTable.vue';
+import { formatNumber } from '@/utils/formatters';
+
+export default {
+name: 'ModelSelector',
+components: {
+  Button,
+  ProgressSpinner,
+  Modal,
+  ComparisonTable
+},
+props: {
+  modelValue: {
+    type: String,
+    required: true
+  }
+},
+emits: ['update:modelValue'],
+setup(props, { emit }) {
+  const { t } = useI18n();
+  const modelStore = useModelStore();
+  const { sortedModels, loading, error } = storeToRefs(modelStore);
+  const showComparison = ref(false);
+
+  // Wybór modelu
+  const selectModel = (modelId) => {
+    modelStore.setSelectedModel(modelId);
+    emit('update:modelValue', modelId);
+  };
+
+  // Przełącznik wyświetlania porównania
+  const toggleComparison = () => {
+    showComparison.value = !showComparison.value;
+  };
+
+  // Retry przy błędzie
+  const retryFetch = () => {
+    modelStore.fetchModels(true);
+  };
+
+  // Obsługa zmian propsów
+  watch(() => props.modelValue, (newValue) => {
+    if (newValue !== modelStore.selectedModelId) {
+      modelStore.setSelectedModel(newValue);
+    }
+  });
+
+  // Montowanie komponentu i pobieranie modeli
+  onMounted(async () => {
+    if (sortedModels.value.length === 0) {
+      await modelStore.fetchModels();
+    }
+    if (props.modelValue && !modelStore.selectedModelId) {
+      modelStore.setSelectedModel(props.modelValue);
+    }
+  });
+
+  return {
+    sortedModels,
+    loading,
+    error,
+    showComparison,
+    selectModel,
+    toggleComparison,
+    retryFetch,
+    formatNumber,
+    t
+  };
+}
+};
+</script>
+
+<style scoped>
+.model-selector {
+background: var(--surface-a);
+border-radius: 12px;
+padding: 20px;
+box-shadow: var(--card-shadow);
+position: relative;
+}
+
+.model-list {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+gap: 20px;
+margin-bottom: 20px;
+}
+
+.model-item {
+background: var(--surface-b);
+border-radius: 8px;
+padding: 15px;
+cursor: pointer;
+transition: all 0.3s ease;
+display: flex;
+flex-direction: column;
+align-items: center;
+text-align: center;
+}
+
+.model-item:hover,
+.model-item.selected {
+transform: translateY(-5px);
+box-shadow: var(--card-shadow);
+}
+
+.model-icon {
+width: 50px;
+height: 50px;
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+font-size: 24px;
+margin-bottom: 10px;
+}
+
+.model-info h4 {
+margin: 0 0 10px 0;
+color: var(--text-color);
+}
+
+.model-info p {
+color: var(--text-color-secondary);
+}
+
+.model-stats {
+display: flex;
+justify-content: space-around;
+margin-top: 10px;
+font-size: 0.9em;
+color: var(--text-color-secondary);
+}
+
+.loading-overlay {
+position: absolute;
+top: 0;
+left: 0;
+right: 0;
+bottom: 0;
+background: rgba(255, 255, 255, 0.7);
+display: flex;
+justify-content: center;
+align-items: center;
+z-index: 1;
+}
+
+.error-message {
+color: var(--error-color);
+text-align: center;
+padding: 20px;
+}
+
+.model-list-enter-active,
+.model-list-leave-active {
+transition: all 0.5s ease;
+}
+
+.model-list-enter-from,
+.model-list-leave-to {
+opacity: 0;
+transform: translateY(30px);
+}
+
+@media (max-width: 768px) {
+.model-list {
+  grid-template-columns: 1fr;
+}
+}
+</style>
+
+
+--- Zawartość pliku: src/components/modulesAI/NeuralNetworkVisualizer.vue ---
+<template>
+  <div class="neural-network-visualizer">
+    <canvas ref="canvas" width="800" height="600"></canvas>
+  </div>
+</template>
+
+<script>
+import { onMounted, ref, watch } from 'vue';
+
+export default {
+  name: 'NeuralNetworkVisualizer',
+  props: {
+      activations: {
+          type: Array,
+          required: true
+      }
+  },
+  setup(props) {
+      const canvas = ref(null);
+      const ctx = ref(null);
+
+      // Funkcja rysująca aktywacje w sieci neuronowej
+      const drawNetwork = () => {
+          const context = ctx.value;
+          const { activations } = props;
+
+          if (!context || !activations.length) return;
+
+          // Wyczyszczenie poprzednich rysunków
+          context.clearRect(0, 0, canvas.value.width, canvas.value.height);
+
+          const layerCount = activations.length;
+          const nodeRadius = 15;
+          const layerSpacing = canvas.value.width / (layerCount + 1);
+          const maxNodes = Math.max(...activations.map(layer => layer.length));
+          const nodeSpacing = canvas.value.height / (maxNodes + 1);
+
+          activations.forEach((layer, layerIndex) => {
+              layer.forEach((activation, nodeIndex) => {
+                  const x = (layerIndex + 1) * layerSpacing;
+                  const y = (nodeIndex + 1) * nodeSpacing;
+
+                  // Narysowanie węzła
+                  context.beginPath();
+                  context.arc(x, y, nodeRadius, 0, Math.PI * 2);
+                  context.fillStyle = `rgba(0, 0, 255, ${activation})`; // Kolor zależny od wartości aktywacji
+                  context.fill();
+                  context.stroke();
+
+                  // Rysowanie połączeń między warstwami
+                  if (layerIndex < layerCount - 1) {
+                      const nextLayer = activations[layerIndex + 1];
+                      nextLayer.forEach((_, nextNodeIndex) => {
+                          const nextX = (layerIndex + 2) * layerSpacing;
+                          const nextY = (nextNodeIndex + 1) * nodeSpacing;
+
+                          context.beginPath();
+                          context.moveTo(x, y);
+                          context.lineTo(nextX, nextY);
+                          context.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                          context.stroke();
+                      });
+                  }
+              });
+          });
+      };
+
+      // Zainicjalizowanie rysowania po zamontowaniu komponentu
+      onMounted(() => {
+          ctx.value = canvas.value.getContext('2d');
+          drawNetwork();
+      });
+
+      // Rysowanie sieci na nowo po zmianie aktywacji
+      watch(() => props.activations, drawNetwork);
+
+      return {
+          canvas
+      };
+  }
+};
+</script>
+
+<style scoped>
+.neural-network-visualizer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 20px 0;
+}
+
+canvas {
+  border: 1px solid #ddd;
+  background-color: #f9f9f9;
+}
+</style>
+
+
+--- Zawartość pliku: src/components/modulesAI/ResponseComparator.vue ---
+<template>
+    <div class="response-comparator">
+        <h3>Response Comparison</h3>
+        <div class="comparison-container">
+            <div class="response response-a">
+                <h4>Response A</h4>
+                <pre>{{ responseA }}</pre>
+            </div>
+            <div class="response response-b">
+                <h4>Response B</h4>
+                <pre>{{ responseB }}</pre>
+            </div>
+        </div>
+        <div class="diff-view">
+            <h4>Differences</h4>
+            <pre v-html="diffResult"></pre>
+        </div>
+        <div class="metrics">
+            <h4>Comparison Metrics</h4>
+            <p>Similarity Score: {{ similarityScore }}%</p>
+            <p>Token Difference: {{ tokenDifference }}</p>
+        </div>
+    </div>
+</template>
+
+<script>
+import { ref, watch } from 'vue';
+import { diffWords } from 'diff';
+import { tokenize } from '@/utils/tokenizer';
+import { calculateSimilarity } from '@/utils/textComparison';
+
+export default {
+    name: 'ResponseComparator',
+    props: {
+        responseA: {
+            type: String,
+            required: true
+        },
+        responseB: {
+            type: String,
+            required: true
+        }
+    },
+    setup(props) {
+        const diffResult = ref('');
+        const similarityScore = ref(0);
+        const tokenDifference = ref(0);
+
+        // Funkcja do porównania odpowiedzi i aktualizacji wyników
+        const updateComparison = () => {
+            // Porównanie tekstów A i B
+            const diff = diffWords(props.responseA, props.responseB);
+            diffResult.value = diff.map(part => {
+                const color = part.added ? 'green' : part.removed ? 'red' : 'black';
+                return `<span style="color: ${color};">${part.value}</span>`;
+            }).join('');
+
+            // Obliczenie podobieństwa
+            similarityScore.value = calculateSimilarity(props.responseA, props.responseB);
+
+            // Obliczenie różnicy w liczbie tokenów
+            const tokensA = tokenize(props.responseA);
+            const tokensB = tokenize(props.responseB);
+            tokenDifference.value = Math.abs(tokensA.length - tokensB.length);
+        };
+
+        // Śledzenie zmian odpowiedzi A i B
+        watch(() => [props.responseA, props.responseB], updateComparison, { immediate: true });
+
+        return {
+            diffResult,
+            similarityScore,
+            tokenDifference
+        };
+    }
+};
+</script>
+
+<style scoped>
+.response-comparator {
+    margin-top: 20px;
+}
+
+.comparison-container {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.response {
+    width: 48%;
+}
+
+pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background-color: #f4f4f4;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.diff-view pre {
+    margin-top: 10px;
+}
+
+.metrics {
+    margin-top: 20px;
+}
+</style>
+
+
+--- Zawartość pliku: src/components/modulesAI/ResponseEvaluator.js ---
+// src/components/modulesAI/ResponseEvaluator.js
+import { tokenize } from '@/utils/tokenizer';
+import { analyzeReadability } from '@/utils/readabilityAnalysis';
+import { detectLanguage } from '@/utils/languageDetection';
+import { checkFactualAccuracy } from '@/utils/factChecker';
+
+export async function evaluateResponse(response, originalQuery) {
+  const tokens = tokenize(response);
+  const readabilityScore = analyzeReadability(response);
+  const language = detectLanguage(response);
+  const factualAccuracy = await checkFactualAccuracy(response);
+
+  return {
+    tokenCount: tokens.length,
+    readabilityScore,
+    language,
+    factualAccuracy,
+    relevance: calculateRelevance(response, originalQuery),
+    coherence: analyzeCoherence(response),
+    suggestions: generateSuggestions(response, originalQuery)
+  };
+}
+
+function calculateRelevance(response, query) {
+  // Implement relevance calculation logic
+  // Return a value between 0 and 1
+}
+
+function analyzeCoherence(response) {
+  // Implement coherence analysis logic
+  // Return a value between 0 and 1
+}
+
+function generateSuggestions(response, query) {
+  const suggestions = [];
+
+  if (response.length < 100) {
+    suggestions.push('The response might be too short. Consider asking for more details.');
+  }
+
+  if (response.length > 1000) {
+    suggestions.push('The response is quite long. You might want to ask for a summary.');
+  }
+
+  // Add more suggestion logic based on the response and query
+
+  return suggestions;
+}
+
+--- Zawartość pliku: src/components/modulesAI/ResponseFormatter.js ---
+// src/components/modulesAI/ResponseFormatter.js
+import { marked } from 'marked';
+import hljs from 'highlight.js';
+
+export function formatResponse(response, format = 'markdown') {
+  switch (format) {
+    case 'markdown':
+      return formatMarkdown(response);
+    case 'html':
+      return formatHTML(response);
+    case 'plain':
+      return formatPlainText(response);
+    default:
+      return response;
+  }
+}
+
+function formatMarkdown(response) {
+  marked.setOptions({
+    highlight: function(code, lang) {
+      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+      return hljs.highlight(code, { language }).value;
+    },
+    langPrefix: 'hljs language-'
+  });
+
+  return marked(response);
+}
+
+function formatHTML(response) {
+  // Convert markdown to HTML and add any additional HTML formatting
+  const htmlContent = marked(response);
+  return `
+    <div class="ai-response">
+      ${htmlContent}
+    </div>
+  `;
+}
+
+function formatPlainText(response) {
+  // Remove any markdown or HTML formatting
+  return response.replace(/[#*_\[\]()]/g, '');
+}
+
+export function extractCodeBlocks(response) {
+  const codeBlockRegex = /```[\s\S]*?```/g;
+  return response.match(codeBlockRegex) || [];
+}
+
+export function formatCodeBlock(codeBlock, language) {
+  const code = codeBlock.replace(/```/g, '').trim();
+  return hljs.highlight(code, { language }).value;
+}
+
+--- Zawartość pliku: src/components/modulesAI/ResponseTimeGraph.vue ---
+<template>
+  <div class="response-time-graph">
+    <canvas ref="responseTimeChart"></canvas>
+  </div>
+</template>
+
+<script>
+import { onMounted, ref, watch } from 'vue';
+import { Chart } from 'chart.js';
+
+export default {
+  name: 'ResponseTimeGraph',
+  props: {
+    responseTimes: {
+      type: Array,
+      required: true
+    }
+  },
+  setup(props) {
+    const responseTimeChart = ref(null);
+    let chartInstance = null;
+
+    const createChart = () => {
+      const ctx = responseTimeChart.value.getContext('2d');
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: props.responseTimes.map((_, index) => `Request ${index + 1}`),
+          datasets: [
+            {
+              label: 'Response Time (ms)',
+              data: props.responseTimes,
+              borderColor: '#4CAF50',
+              backgroundColor: 'rgba(76, 175, 80, 0.2)',
+              borderWidth: 2,
+              fill: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: 'Request'
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: 'Time (ms)'
+              },
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    };
+
+    onMounted(() => {
+      createChart();
+    });
+
+    // Watch for changes in responseTimes and update the chart accordingly
+    watch(
+      () => props.responseTimes,
+      (newTimes) => {
+        if (chartInstance) {
+          chartInstance.data.labels = newTimes.map((_, index) => `Request ${index + 1}`);
+          chartInstance.data.datasets[0].data = newTimes;
+          chartInstance.update();
+        }
+      }
+    );
+
+    return {
+      responseTimeChart
+    };
+  }
+};
+</script>
+
+<style scoped>
+.response-time-graph {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+canvas {
+  width: 100%;
+  height: 300px;
+}
+</style>
+
+
+--- Zawartość pliku: src/components/modulesAI/ResponseTimeline.vue ---
+<template>
+  <div class="response-timeline">
+    <h3>Response Timeline</h3>
+    <div class="timeline-container">
+      <div v-for="(event, index) in sortedTimeline" :key="index" class="timeline-event">
+        <div class="timeline-marker"></div>
+        <div class="timeline-content">
+          <h4>{{ event.title }}</h4>
+          <p>{{ event.description }}</p>
+          <small>{{ formatTime(event.timestamp) }}</small>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import { ref, computed, onMounted } from 'vue';
+import { format } from 'date-fns';
+
+export default {
+  name: 'ResponseTimeline',
+  props: {
+    responseEvents: {
+      type: Array,
+      required: true
+    }
+  },
+  setup(props) {
+    const timeline = ref([]);
+
+    // Wykonanie po zamontowaniu komponentu
+    onMounted(() => {
+      timeline.value = props.responseEvents.map(event => ({
+        ...event,
+        timestamp: new Date(event.timestamp)
+      }));
+    });
+
+    // Posortowana oś czasu
+    const sortedTimeline = computed(() => {
+      return timeline.value.sort((a, b) => a.timestamp - b.timestamp);
+    });
+
+    // Formatowanie czasu do czytelnego formatu
+    const formatTime = (timestamp) => {
+      return format(timestamp, 'HH:mm:ss.SSS');
+    };
+
+    return {
+      sortedTimeline,
+      formatTime
+    };
+  }
+};
+</script>
+
+<style scoped>
+.response-timeline {
+  margin-top: 20px;
+}
+
+.timeline-container {
+  position: relative;
+  padding-left: 30px;
+}
+
+.timeline-container::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: #ddd;
+}
+
+.timeline-event {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.timeline-marker {
+  position: absolute;
+  left: -34px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #4CAF50;
+  border: 2px solid #fff;
+}
+
+.timeline-content {
+  background-color: #f9f9f9;
+  padding: 15px;
+  border-radius: 5px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+}
+
+.timeline-content h4 {
+  margin-top: 0;
+  color: #333;
+}
+
+.timeline-content p {
+  margin-bottom: 5px;
+}
+
+.timeline-content small {
+  color: #777;
+}
+</style>
+
+
+--- Zawartość pliku: src/components/modulesAI/ResponseViewer.vue ---
+<template>
+    <div class="response-viewer" :class="{ 'loading': isLoading }">
+      <div v-if="isLoading" class="loading-overlay">
+        <div class="loader"></div>
+        <p>AI is thinking...</p>
+      </div>
+      <div v-else-if="error" class="error-message">
+        <i class="fas fa-exclamation-triangle"></i>
+        <p>{{ error }}</p>
+      </div>
+      <div v-else-if="response" class="response-content">
+        <div class="response-header">
+          <h3>AI Response</h3>
+          <div class="response-actions">
+            <button @click="copyToClipboard" title="Copy to clipboard">
+              <i class="fas fa-copy"></i>
+            </button>
+            <button @click="downloadResponse" title="Download response">
+              <i class="fas fa-download"></i>
+            </button>
+            <button @click="toggleFullscreen" title="Toggle fullscreen">
+              <i class="fas fa-expand"></i>
+            </button>
+          </div>
+        </div>
+        <div class="response-body" ref="responseBody" v-html="formattedResponse"></div>
+        <div class="response-footer">
+          <p>Generated in {{ processingTime }}ms using {{ modelUsed }}</p>
+          <div class="response-feedback">
+            <button @click="provideFeedback(true)" title="Thumbs up">👍</button>
+            <button @click="provideFeedback(false)" title="Thumbs down">👎</button>
+          </div>
+        </div>
+      </div>
+      <div v-else class="no-response">
+        <p>No response yet. Try sending a command!</p>
+      </div>
+    </div>
+  </template>
+  
+  <script>
+  import { ref, computed, onMounted, watch } from 'vue';
+  import { marked } from 'marked';
+  import { useClipboard } from '@vueuse/core';
+  import { useToast } from 'vue-toastification';
+  
+  export default {
+    name: 'ResponseViewer',
+    props: {
+      response: {
+        type: String,
+        default: ''
+      },
+      isLoading: {
+        type: Boolean,
+        default: false
+      },
+      error: {
+        type: String,
+        default: ''
+      },
+      processingTime: {
+        type: Number,
+        default: 0
+      },
+      modelUsed: {
+        type: String,
+        default: 'Unknown Model'
+      }
+    },
+    setup(props) {
+      const responseBody = ref(null);
+      const toast = useToast();
+      const { copy, copied } = useClipboard();
+  
+      const formattedResponse = computed(() => marked(props.response));
+  
+      const copyToClipboard = async () => {
+        await copy(props.response);
+        if (copied.value) {
+          toast.success('Response copied to clipboard!');
+        } else {
+          toast.error('Failed to copy response.');
+        }
+      };
+  
+      const downloadResponse = () => {
+        const blob = new Blob([props.response], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ai-response-${new Date().toISOString()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      };
+  
+      const toggleFullscreen = () => {
+        if (!document.fullscreenElement) {
+          responseBody.value.requestFullscreen();
+        } else {
+          document.exitFullscreen();
+        }
+      };
+  
+      const provideFeedback = (isPositive) => {
+        console.log(`User provided ${isPositive ? 'positive' : 'negative'} feedback`);
+        toast.info('Thank you for your feedback!');
+      };
+  
+      onMounted(() => {
+        watch(() => props.response, () => {
+          if (responseBody.value) {
+            responseBody.value.querySelectorAll('pre code').forEach((block) => {
+              hljs.highlightBlock(block);
+            });
+          }
+        });
+      });
+  
+      return {
+        responseBody,
+        formattedResponse,
+        copyToClipboard,
+        downloadResponse,
+        toggleFullscreen,
+        provideFeedback
+      };
+    }
+  };
+  </script>
+  
+  <style scoped>
+  .response-viewer {
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+  }
+  
+  .loader {
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #3498db;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  
+  .response-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+  }
+  
+  .response-actions button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2em;
+    margin-left: 10px;
+    color: #4a90e2;
+    transition: color 0.3s ease;
+  }
+  
+  .response-actions button:hover {
+    color: #2c3e50;
+  }
+  
+  .response-body {
+    max-height: 500px;
+    overflow-y: auto;
+    padding: 15px;
+    background: #f7f9fc;
+    border-radius: 5px;
+    line-height: 1.6;
+  }
+  
+  .response-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 15px;
+    font-size: 0.9em;
+    color: #666;
+  }
+  
+  .response-feedback button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.5em;
+    margin-left: 10px;
+  }
+  
+  .error-message {
+    color: #e74c3c;
+    display: flex;
+    align-items: center;
+    font-weight: bold;
+  }
+  
+  .error-message i {
+    margin-right: 10px;
+    font-size: 1.5em;
+  }
+  
+  .no-response {
+    text-align: center;
+    color: #7f8c8d;
+    font-style: italic;
+  }
+  </style>
+  
+
+--- Zawartość pliku: src/components/modulesAI/SemanticAnalyzer.js ---
+// src/components/modulesAI/SemanticAnalyzer.js
+import { ref } from 'vue';
+import { useAIStore } from '@/stores/aiStore';
+
+export default {
+  name: 'SemanticAnalyzer',
+  props: {
+    text: {
+      type: String,
+      required: true
+    }
+  },
+  setup(props) {
+    const aiStore = useAIStore();
+    const analysisResult = ref(null);
+    const isAnalyzing = ref(false);
+    const error = ref(null);
+
+    // Funkcja do analizy semantycznej
+    const analyzeText = async () => {
+      isAnalyzing.value = true;
+      error.value = null;
+
+      try {
+        // Wywołanie usługi AI do analizy tekstu
+        const result = await aiStore.analyzeText(props.text);
+        analysisResult.value = result;
+      } catch (e) {
+        console.error('Błąd podczas analizy tekstu:', e);
+        error.value = 'Nie udało się przeprowadzić analizy semantycznej. Spróbuj ponownie.';
+      } finally {
+        isAnalyzing.value = false;
+      }
+    };
+
+    return {
+      analysisResult,
+      isAnalyzing,
+      error,
+      analyzeText
+    };
+  },
+
+  render() {
+    return this.$scopedSlots.default({
+      analysisResult: this.analysisResult,
+      isAnalyzing: this.isAnalyzing,
+      error: this.error,
+      analyzeText: this.analyzeText
+    });
+  }
+};
+
+
+--- Zawartość pliku: src/components/modulesAI/SummaryGenerator.js ---
+// src/components/modulesAI/SummaryGenerator.js
+import { ref, computed } from 'vue';
+import { useAIStore } from '@/stores/aiStore';
+import { extractKeyPoints, generateBulletPoints } from '@/utils/textProcessing';
+
+export default {
+  name: 'SummaryGenerator',
+  props: {
+    text: {
+      type: String,
+      required: true
+    },
+    maxLength: {
+      type: Number,
+      default: 200
+    },
+    style: {
+      type: String,
+      default: 'concise',
+      validator: (value) => ['concise', 'detailed', 'bullet-points'].includes(value)
+    }
+  },
+  setup(props) {
+    const aiStore = useAIStore();
+    const summary = ref('');
+    const isGenerating = ref(false);
+    const error = ref(null);
+
+    // Funkcja generująca podsumowanie na podstawie stylu i tekstu
+    const generateSummary = async () => {
+      isGenerating.value = true;
+      error.value = null;
+
+      try {
+        let generatedSummary;
+
+        // Wybór stylu podsumowania
+        switch (props.style) {
+          case 'concise':
+            generatedSummary = await aiStore.generateConciseSummary(props.text, props.maxLength);
+            break;
+          case 'detailed':
+            generatedSummary = await aiStore.generateDetailedSummary(props.text, props.maxLength);
+            break;
+          case 'bullet-points':
+            const keyPoints = extractKeyPoints(props.text);
+            generatedSummary = generateBulletPoints(keyPoints);
+            break;
+          default:
+            throw new Error('Invalid summary style');
+        }
+
+        summary.value = generatedSummary;
+
+      } catch (e) {
+        console.error('Error generating summary:', e);
+        error.value = 'Failed to generate summary. Please try again.';
+      } finally {
+        isGenerating.value = false;
+      }
+    };
+
+    // Obliczenie długości podsumowania
+    const summaryLength = computed(() => summary.value.length);
+
+    return {
+      summary,
+      isGenerating,
+      error,
+      summaryLength,
+      generateSummary
+    };
+  },
+
+  render() {
+    return this.$scopedSlots.default({
+      summary: this.summary,
+      isGenerating: this.isGenerating,
+      error: this.error,
+      summaryLength: this.summaryLength,
+      generateSummary: this.generateSummary
+    });
+  }
+};
+
+
+--- Zawartość pliku: src/components/modulesAI/TextToSpeech.vue ---
+<template>
+    <div class="text-to-speech">
+        <h3>AI-Powered Text-to-Speech</h3>
+        <div class="tts-controls">
+            <select v-model="selectedVoice">
+                <option v-for="voice in availableVoices" :key="voice.voiceURI" :value="voice">
+                    {{ voice.name }} ({{ voice.lang }})
+                </option>
+            </select>
+            <div class="voice-settings">
+                <label>
+                    Speed:
+                    <input type="range" v-model.number="speed" min="0.5" max="2" step="0.1" />
+                    {{ speed.toFixed(1) }}x
+                </label>
+                <label>
+                    Pitch:
+                    <input type="range" v-model.number="pitch" min="0" max="2" step="0.1" />
+                    {{ pitch.toFixed(1) }}
+                </label>
+            </div>
+        </div>
+        <textarea v-model="text" placeholder="Enter text to convert to speech"></textarea>
+        <div class="action-buttons">
+            <button @click="speakText" :disabled="!text || isSpeaking">
+                {{ isSpeaking ? 'Speaking...' : 'Speak' }}
+            </button>
+            <button @click="pauseSpeech" :disabled="!isSpeaking">Pause</button>
+            <button @click="resumeSpeech" :disabled="!isPaused">Resume</button>
+            <button @click="stopSpeech" :disabled="!isSpeaking && !isPaused">Stop</button>
+        </div>
+        <div class="advanced-options">
+            <h4>Advanced Options</h4>
+            <label>
+                <input type="checkbox" v-model="useNeuralVoice" /> Use Neural Voice (if available)
+            </label>
+            <label>
+                <input type="checkbox" v-model="enableSSML" /> Enable SSML
+            </label>
+            <div v-if="enableSSML" class="ssml-editor">
+                <textarea v-model="ssmlText" placeholder="Enter SSML"></textarea>
+                <button @click="validateSSML">Validate SSML</button>
+            </div>
+        </div>
+        <div class="audio-visualization">
+            <canvas ref="visualizer"></canvas>
+        </div>
+    </div>
+</template>
+
+<script>
+import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { useTextToSpeechStore } from '@/stores/textToSpeechStore';
+
+export default {
+    name: 'TextToSpeech',
+    setup() {
+        const ttsStore = useTextToSpeechStore();
+        const text = ref('');
+        const selectedVoice = ref(null);
+        const availableVoices = ref([]);
+        const speed = ref(1);
+        const pitch = ref(1);
+        const isSpeaking = ref(false);
+        const isPaused = ref(false);
+        const useNeuralVoice = ref(false);
+        const enableSSML = ref(false);
+        const ssmlText = ref('');
+        const visualizer = ref(null);
+
+        let speechSynthesis = window.speechSynthesis;
+        let audioContext, analyser, dataArray, source;
+
+        const updateVoices = () => {
+            availableVoices.value = speechSynthesis.getVoices();
+            if (!selectedVoice.value && availableVoices.value.length > 0) {
+                selectedVoice.value = availableVoices.value[0];
+            }
+        };
+
+        onMounted(() => {
+            updateVoices();
+            if (speechSynthesis.onvoiceschanged !== undefined) {
+                speechSynthesis.onvoiceschanged = updateVoices;
+            }
+
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 2048;
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+        });
+
+        onUnmounted(() => {
+            stopSpeech();
+            if (audioContext) {
+                audioContext.close();
+            }
+        });
+
+        const speakText = () => {
+            stopSpeech();
+            isSpeaking.value = true;
+            isPaused.value = false;
+
+            const utterance = new SpeechSynthesisUtterance(enableSSML.value ? ssmlText.value : text.value);
+            utterance.voice = selectedVoice.value;
+            utterance.rate = speed.value;
+            utterance.pitch = pitch.value;
+
+            utterance.onend = () => {
+                isSpeaking.value = false;
+                isPaused.value = false;
+            };
+
+            utterance.onerror = (event) => {
+                console.error('SpeechSynthesisUtterance error:', event);
+                isSpeaking.value = false;
+                isPaused.value = false;
+            };
+
+            if (useNeuralVoice.value) {
+                utterance.voice = availableVoices.value.find(voice => voice.name.includes('Neural'));
+            }
+
+            speechSynthesis.speak(utterance);
+            visualize();
+        };
+
+        const pauseSpeech = () => {
+            if (speechSynthesis.speaking) {
+                speechSynthesis.pause();
+                isPaused.value = true;
+            }
+        };
+
+        const resumeSpeech = () => {
+            if (speechSynthesis.paused) {
+                speechSynthesis.resume();
+                isPaused.value = false;
+            }
+        };
+
+        const stopSpeech = () => {
+            speechSynthesis.cancel();
+            isSpeaking.value = false;
+            isPaused.value = false;
+        };
+
+        const validateSSML = () => {
+            // Implement SSML validation logic here
+            console.log('Validating SSML:', ssmlText.value);
+        };
+
+        const visualize = () => {
+            if (!visualizer.value) return;
+
+            const canvas = visualizer.value;
+            const canvasCtx = canvas.getContext('2d');
+
+            if (!source) {
+                source = audioContext.createMediaElementSource(new Audio());
+                source.connect(analyser);
+                analyser.connect(audioContext.destination);
+            }
+
+            function draw() {
+                const WIDTH = canvas.width;
+                const HEIGHT = canvas.height;
+
+                requestAnimationFrame(draw);
+
+                analyser.getByteFrequencyData(dataArray);
+
+                canvasCtx.clearRect(0, 0, WIDTH, HEIGHT);
+
+                const barWidth = (WIDTH / analyser.frequencyBinCount) * 2.5;
+                let barHeight;
+                let x = 0;
+
+                for (let i = 0; i < analyser.frequencyBinCount; i++) {
+                    barHeight = dataArray[i] / 2;
+
+                    canvasCtx.fillStyle = `rgb(${barHeight + 100}, 50, 50)`;
+                    canvasCtx.fillRect(x, HEIGHT - barHeight / 2, barWidth, barHeight);
+
+                    x += barWidth + 1;
+                }
+            }
+
+            draw();
+        };
+
+        watch(useNeuralVoice, (newValue) => {
+            if (newValue) {
+                const neuralVoice = availableVoices.value.find(voice => voice.name.includes('Neural'));
+                if (neuralVoice) {
+                    selectedVoice.value = neuralVoice;
+                } else {
+                    console.warn('Neural voice not available');
+                    useNeuralVoice.value = false;
+                }
+            }
+        });
+
+        return {
+            text,
+            selectedVoice,
+            availableVoices,
+            speed,
+            pitch,
+            isSpeaking,
+            isPaused,
+            useNeuralVoice,
+            enableSSML,
+            ssmlText,
+            visualizer,
+            speakText,
+            pauseSpeech,
+            resumeSpeech,
+            stopSpeech,
+            validateSSML
+        };
+    }
+};
+</script>
+
+<style scoped>
+.text-to-speech {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f5f5f5;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+h3 {
+    color: #333;
+    text-align: center;
+}
+
+.tts-controls {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+select,
+input[type="range"] {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.voice-settings {
+    display: flex;
+    flex-direction: column;
+}
+
+textarea {
+    width: 100%;
+    height: 150px;
+    margin-bottom: 20px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.action-buttons {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+button {
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+button:hover:not(:disabled) {
+    background-color: #45a049;
+}
+
+button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.advanced-options {
+    margin-top: 20px;
+    padding: 20px;
+    background-color: #e9e9e9;
+    border-radius: 5px;
+}
+
+.ssml-editor {
+    margin-top: 10px;
+}
+
+.ssml-editor textarea {
+    height: 100px;
+}
+
+.audio-visualization {
+    margin-top: 20px;
+}
+
+canvas {
+    width: 100%;
+    height: 100px;
+    background-color: #333;
+    border-radius: 5px;
+}
+</style>
+
+
+--- Zawartość pliku: src/components/modulesAI/ThreadManager.vue ---
+<template>
+  <div class="thread-manager">
+    <h3>AI Conversation Threads</h3>
+    <div class="thread-controls">
+      <button @click="createNewThread" class="new-thread-btn">
+        <i class="fas fa-plus"></i> New Thread
+      </button>
+      <input v-model="searchQuery" placeholder="Search threads..." class="thread-search" />
+    </div>
+    <div class="thread-list">
+      <div 
+        v-for="thread in filteredThreads" 
+        :key="thread.id" 
+        class="thread-item"
+        :class="{ active: thread.id === currentThreadId }"
+        @click="selectThread(thread.id)"
+      >
+        <div class="thread-info">
+          <h4>{{ thread.name }}</h4>
+          <p>{{ thread.lastMessage | truncate(50) }}</p>
+        </div>
+        <div class="thread-actions">
+          <button @click.stop="renameThread(thread.id)" title="Rename thread">
+            <i class="fas fa-edit"></i>
+          </button>
+          <button @click.stop="deleteThread(thread.id)" title="Delete thread">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div v-if="filteredThreads.length === 0" class="no-threads">
+      No threads found. Start a new conversation!
+    </div>
+    <div v-if="showThreadModal" class="thread-modal">
+      <div class="modal-content">
+        <h4>{{ isEditingThread ? 'Rename Thread' : 'New Thread' }}</h4>
+        <input v-model="newThreadName" placeholder="Enter thread name" @keyup.enter="confirmThreadAction" />
+        <div class="modal-actions">
+          <button @click="confirmThreadAction" :disabled="isProcessing">{{ isProcessing ? 'Processing...' : 'Confirm' }}</button>
+          <button @click="cancelThreadAction">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import { ref, computed, watch } from 'vue';
+import { useThreadStore } from '@/stores/threadStore';
+import { useToast } from 'vue-toastification';
+import debounce from 'lodash/debounce';
+
+export default {
+  name: 'ThreadManager',
+  props: {
+    currentThreadId: {
+      type: String,
+      default: null
+    }
+  },
+  setup(props, { emit }) {
+    const threadStore = useThreadStore();
+    const toast = useToast();
+
+    const searchQuery = ref('');
+    const showThreadModal = ref(false);
+    const newThreadName = ref('');
+    const isEditingThread = ref(false);
+    const editingThreadId = ref(null);
+    const isProcessing = ref(false);
+
+    // Filtruj wątki w zależności od zapytania
+    const filteredThreads = computed(() => {
+      return threadStore.threads.filter(thread =>
+        thread.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+      );
+    });
+
+    // Funkcja do stworzenia nowego wątku
+    const createNewThread = () => {
+      showThreadModal.value = true;
+      isEditingThread.value = false;
+      newThreadName.value = '';
+    };
+
+    // Funkcja do zmiany nazwy wątku
+    const renameThread = (threadId) => {
+      showThreadModal.value = true;
+      isEditingThread.value = true;
+      editingThreadId.value = threadId;
+      const thread = threadStore.threads.find(t => t.id === threadId);
+      newThreadName.value = thread ? thread.name : '';
+    };
+
+    // Funkcja do potwierdzenia akcji (stwórz/zmień nazwę)
+    const confirmThreadAction = debounce(async () => {
+      if (newThreadName.value.trim() === '' || isProcessing.value) {
+        toast.error('Thread name cannot be empty or action already in progress.');
+        return;
+      }
+
+      isProcessing.value = true;
+
+      try {
+        if (isEditingThread.value) {
+          await threadStore.renameThread(editingThreadId.value, newThreadName.value);
+          toast.success('Thread renamed successfully');
+        } else {
+          const newThread = await threadStore.createThread(newThreadName.value);
+          emit('thread-created', newThread.id);
+          toast.success('New thread created');
+        }
+        showThreadModal.value = false;
+      } catch (error) {
+        toast.error(`Error: ${error.message}`);
+      } finally {
+        isProcessing.value = false;
+      }
+    }, 300);
+
+    // Funkcja do anulowania akcji
+    const cancelThreadAction = () => {
+      showThreadModal.value = false;
+      newThreadName.value = '';
+      isEditingThread.value = false;
+      editingThreadId.value = null;
+    };
+
+    // Funkcja do usunięcia wątku
+    const deleteThread = async (threadId) => {
+      if (confirm('Are you sure you want to delete this thread?')) {
+        try {
+          await threadStore.deleteThread(threadId);
+          toast.success('Thread deleted successfully');
+          if (props.currentThreadId === threadId) {
+            emit('thread-changed', null);
+          }
+        } catch (error) {
+          toast.error(`Error deleting thread: ${error.message}`);
+        }
+      }
+    };
+
+    // Funkcja do wybrania wątku
+    const selectThread = (threadId) => {
+      emit('thread-changed', threadId);
+    };
+
+    // Filtr truncate do skracania tekstu
+    const truncate = (value, length) => {
+      if (!value) return '';
+      if (value.length <= length) return value;
+      return value.slice(0, length) + '...';
+    };
+
+    // Watcher, aby zaktualizować listę wątków po zmianie query
+    watch(searchQuery, debounce((newQuery) => {
+      console.log('Search updated:', newQuery);
+    }, 300));
+
+    return {
+      searchQuery,
+      filteredThreads,
+      showThreadModal,
+      newThreadName,
+      isEditingThread,
+      isProcessing,
+      createNewThread,
+      renameThread,
+      confirmThreadAction,
+      cancelThreadAction,
+      deleteThread,
+      selectThread,
+      truncate
+    };
+  }
+};
+</script>
+
+<style scoped>
+.thread-manager {
+  background: #f0f4f8;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.thread-controls {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+}
+
+.new-thread-btn {
+  background: #4caf50;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.new-thread-btn:hover {
+  background: #45a049;
+}
+
+.thread-search {
+  flex-grow: 1;
+  margin-left: 10px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+
+.thread-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.thread-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  margin-bottom: 10px;
+  padding: 10px;
+  border-radius: 5px;
+  transition: all 0.3s ease;
+}
+
+.thread-item:hover, .thread-item.active {
+  background: #e0e7ff;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.thread-info {
+  flex-grow: 1;
+}
+
+.thread-info h4 {
+  margin: 0;
+  font-size: 1.1em;
+}
+
+.thread-info p {
+  margin: 5px 0 0;
+  font-size: 0.9em;
+  color: #666;
+}
+
+.thread-actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1em;
+  color: #666;
+  transition: color 0.3s;
+}
+
+.thread-actions button:hover {
+  color: #000;
+}
+
+.no-threads {
+  text-align: center;
+  color: #666;
+  padding: 20px;
+}
+
+.thread-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  width: 300px;
+}
+
+.modal-content input {
+  width: 100%;
+  padding: 8px;
+  margin: 10px 0;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 15px;
+}
+
+.modal-actions button {
+  margin-left: 10px;
+  padding: 8px 15px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.modal-actions button:first-child {
+  background: #4caf50;
+  color: white;
+}
+
+.modal-actions button:last-child {
+  background: #f44336;
+  color: white;
+}
+</style>
+
+
+--- Zawartość pliku: src/components/modulesAI/TokenMeter.vue ---
+<template>
+    <div class="token-meter">
+      <ProgressBar :value="percentage" :showValue="false" />
+      <div class="token-info">
+        <span>{{ usedTokens }} / {{ maxTokens }} tokens</span>
+        <span>{{ percentage.toFixed(1) }}%</span>
+      </div>
+    </div>
+  </template>
+  
+  <script>
+  import { defineComponent, computed } from 'vue';
+  import ProgressBar from 'primevue/progressbar';
+  
+  export default defineComponent({
+    name: 'TokenMeter',
+    components: {
+      ProgressBar
+    },
+    props: {
+      usedTokens: {
+        type: Number,
+        required: true
+      },
+      maxTokens: {
+        type: Number,
+        required: true
+      }
+    },
+    setup(props) {
+      const percentage = computed(() => {
+        if (props.maxTokens === 0) return 0; // Ochrona przed dzieleniem przez zero
+        return (props.usedTokens / props.maxTokens) * 100;
+      });
+  
+      return {
+        percentage
+      };
+    }
+  });
+  </script>
+  
+  <style scoped>
+  .token-meter {
+    width: 100%;
+  }
+  
+  .token-info {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-color);
+  }
+  
+  :deep(.p-progressbar) {
+    height: 0.5rem;
+  }
+  
+  :deep(.p-progressbar-value) {
+    background-color: var(--primary-color);
+  }
+  </style>
+  
+
+--- Zawartość pliku: src/components/modulesAI/TranslationHistory.vue ---
+<template>
+    <div class="translation-history card">
+      <h3>Historia tłumaczeń</h3>
+      <DataTable :value="sortedHistory" :paginator="true" :rows="10"
+                 :rowsPerPageOptions="[5, 10, 20, 50]"
+                 stripedRows class="p-datatable-sm">
+        <Column field="timestamp" header="Data" :sortable="true">
+          <template #body="slotProps">
+            {{ formatDate(slotProps.data.timestamp) }}
+          </template>
+        </Column>
+        <Column field="from" header="Z" :sortable="true" />
+        <Column field="to" header="Na" :sortable="true" />
+        <Column field="original" header="Oryginalny tekst">
+          <template #body="slotProps">
+            {{ truncateText(slotProps.data.original) }}
+          </template>
+        </Column>
+        <Column field="translated" header="Tłumaczenie">
+          <template #body="slotProps">
+            {{ truncateText(slotProps.data.translated) }}
+          </template>
+        </Column>
+        <Column header="Akcje">
+          <template #body="slotProps">
+            <Button icon="pi pi-copy" class="p-button-rounded p-button-text"
+                    @click="copyTranslation(slotProps.data)"
+                    tooltip="Kopiuj tłumaczenie" />
+            <Button icon="pi pi-replay" class="p-button-rounded p-button-text"
+                    @click="reuseTranslation(slotProps.data)"
+                    tooltip="Użyj ponownie" />
+          </template>
+        </Column>
+      </DataTable>
+    </div>
+  </template>
+  
+  <script>
+  import { defineComponent, computed } from 'vue';
+  import { useTranslationStore } from '@/stores/translationStore';
+  import { useToast } from 'primevue/usetoast';
+  import DataTable from 'primevue/datatable';
+  import Column from 'primevue/column';
+  import Button from 'primevue/button';
+  import { format } from 'date-fns';
+  import { pl } from 'date-fns/locale';
+  
+  export default defineComponent({
+    name: 'TranslationHistory',
+    components: {
+      DataTable,
+      Column,
+      Button
+    },
+    setup() {
+      const translationStore = useTranslationStore();
+      const toast = useToast();
+  
+      // Zmieniono metodę na generowanie płytkiej kopii historycznych danych zamiast bezpośredniej referencji.
+      const sortedHistory = computed(() => {
+        return [...translationStore.history].sort((a, b) => b.timestamp - a.timestamp);
+      });
+  
+      const formatDate = (timestamp) => {
+        return format(new Date(timestamp), 'dd.MM.yyyy HH:mm', { locale: pl });
+      };
+  
+      const truncateText = (text, maxLength = 30) => {
+        return text && text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+      };
+  
+      const copyTranslation = (item) => {
+        navigator.clipboard.writeText(item.translated).then(() => {
+          toast.add({
+            severity: 'success',
+            summary: 'Skopiowano',
+            detail: 'Tłumaczenie zostało skopiowane do schowka',
+            life: 3000
+          });
+        });
+      };
+  
+      const reuseTranslation = (item) => {
+        translationStore.setSourceText(item.original);
+        translationStore.setSourceLanguage(item.from);
+        translationStore.setTargetLanguage(item.to);
+        toast.add({
+          severity: 'info',
+          summary: 'Ponowne użycie',
+          detail: 'Tłumaczenie zostało załadowane do edytora',
+          life: 3000
+        });
+      };
+  
+      return {
+        sortedHistory,
+        formatDate,
+        truncateText,
+        copyTranslation,
+        reuseTranslation
+      };
+    }
+  });
+  </script>
+  
+  <style scoped>
+  .translation-history {
+    margin-top: 2rem;
+    padding: 1rem;
+    background-color: var(--card-bg-light);
+    transition: background-color 0.3s ease;
+  }
+  
+  :deep(.p-datatable) {
+    background-color: transparent;
+  }
+  
+  :deep(.p-datatable .p-datatable-thead > tr > th) {
+    background-color: var(--primary-bg-color);
+    color: var(--text-color);
+  }
+  
+  :deep(.p-datatable .p-datatable-tbody > tr) {
+    background-color: var(--card-bg-light);
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  
+  :deep(.p-datatable .p-datatable-tbody > tr:nth-child(even)) {
+    background-color: var(--hover-bg-color);
+  }
+  
+  [data-theme="dark"] .translation-history {
+    background-color: var(--card-bg-dark);
+  }
+  
+  [data-theme="dark"] :deep(.p-datatable .p-datatable-thead > tr > th) {
+    background-color: var(--primary-bg-color);
+    color: var(--text-dark);
+  }
+  
+  [data-theme="dark"] :deep(.p-datatable .p-datatable-tbody > tr) {
+    background-color: var(--card-bg-dark);
+    color: var(--text-dark);
+  }
+  
+  [data-theme="dark"] :deep(.p-datatable .p-datatable-tbody > tr:nth-child(even)) {
+    background-color: var(--hover-bg-color);
+  }
+  
+  @media (max-width: 768px) {
+    .translation-history {
+      padding: 0.5rem;
+    }
+  
+    :deep(.p-datatable .p-datatable-thead > tr > th),
+    :deep(.p-datatable .p-datatable-tbody > tr > td) {
+      padding: 0.5rem;
+    }
+  }
+  </style>
+  
+
+--- Zawartość pliku: src/components/modulesAI/VisualizationEngine.vue ---
+<template>
+    <div class="visualization-engine">
+        <div class="visualization-controls">
+            <select v-model="selectedVisualization">
+                <option value="tokenDistribution">Token Distribution</option>
+                <option value="sentimentAnalysis">Sentiment Analysis</option>
+                <option value="conceptMap">Concept Map</option>
+                <option value="timeSeriesAnalysis">Time Series Analysis</option>
+            </select>
+            <button @click="generateVisualization" :disabled="isGenerating">
+                {{ isGenerating ? 'Generating...' : 'Generate Visualization' }}
+            </button>
+        </div>
+
+        <div class="visualization-container" ref="visualizationContainer">
+            <component :is="currentVisualizationComponent" :data="visualizationData"
+                @update:data="updateVisualizationData"></component>
+        </div>
+
+        <div class="visualization-export">
+            <button @click="exportVisualization('png')" :disabled="!visualizationData">Export as PNG</button>
+            <button @click="exportVisualization('svg')" :disabled="!visualizationData">Export as SVG</button>
+            <button @click="exportVisualization('json')" :disabled="!visualizationData">Export Data as JSON</button>
+        </div>
+
+        <AIInsightPanel :insights="aiInsights" @request-new-insight="generateAIInsight" />
+    </div>
+</template>
+
+<script>
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
+import { useAIStore } from '@/stores/aiStore';
+import TokenDistributionChart from './visualizations/TokenDistributionChart.vue';
+import SentimentAnalysisGraph from './visualizations/SentimentAnalysisGraph.vue';
+import ConceptMapNetwork from './visualizations/ConceptMapNetwork.vue';
+import TimeSeriesChart from './visualizations/TimeSeriesChart.vue';
+import AIInsightPanel from './AIInsightPanel.vue';
+import { generateVisualizationData, exportChart } from '@/utils/visualizationUtils';
+
+export default {
+    name: 'VisualizationEngine',
+    components: {
+        TokenDistributionChart,
+        SentimentAnalysisGraph,
+        ConceptMapNetwork,
+        TimeSeriesChart,
+        AIInsightPanel
+    },
+    setup() {
+        const aiStore = useAIStore();
+        const selectedVisualization = ref('tokenDistribution');
+        const visualizationData = ref(null);
+        const isGenerating = ref(false);
+        const visualizationContainer = ref(null);
+        const aiInsights = ref([]);
+
+        const currentVisualizationComponent = computed(() => {
+            switch (selectedVisualization.value) {
+                case 'tokenDistribution': return TokenDistributionChart;
+                case 'sentimentAnalysis': return SentimentAnalysisGraph;
+                case 'conceptMap': return ConceptMapNetwork;
+                case 'timeSeriesAnalysis': return TimeSeriesChart;
+                default: return null;
+            }
+        });
+
+        const generateVisualization = async () => {
+            if (isGenerating.value) return; // Prevent multiple generations at the same time
+
+            isGenerating.value = true;
+            try {
+                const data = await generateVisualizationData(selectedVisualization.value, aiStore.getCurrentConversation());
+                visualizationData.value = data;
+                await nextTick(); // Ensure DOM update
+                generateAIInsight();
+            } catch (error) {
+                console.error('Error generating visualization:', error);
+            } finally {
+                isGenerating.value = false;
+            }
+        };
+
+        const updateVisualizationData = (newData) => {
+            visualizationData.value = newData;
+        };
+
+        const exportVisualization = async (format) => {
+            if (!visualizationContainer.value) return;
+
+            try {
+                const result = await exportChart(visualizationContainer.value, format, selectedVisualization.value);
+                if (format === 'json') {
+                    const dataStr = JSON.stringify(visualizationData.value);
+                    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                    const exportFileDefaultName = `${selectedVisualization.value}_data.json`;
+                    const linkElement = document.createElement('a');
+                    linkElement.setAttribute('href', dataUri);
+                    linkElement.setAttribute('download', exportFileDefaultName);
+                    linkElement.click();
+                } else {
+                    const link = document.createElement('a');
+                    link.download = `${selectedVisualization.value}_visualization.${format}`;
+                    link.href = result;
+                    link.click();
+                }
+            } catch (error) {
+                console.error('Error exporting visualization:', error);
+            }
+        };
+
+        const generateAIInsight = async () => {
+            if (!visualizationData.value) return;
+
+            try {
+                const insight = await aiStore.generateInsight(visualizationData.value, selectedVisualization.value);
+                aiInsights.value.unshift(insight);
+            } catch (error) {
+                console.error('Error generating AI insight:', error);
+            }
+        };
+
+        onMounted(() => {
+            generateVisualization();
+        });
+
+        watch(selectedVisualization, (newVisualization, oldVisualization) => {
+            if (newVisualization !== oldVisualization) {
+                generateVisualization();
+            }
+        });
+
+        return {
+            selectedVisualization,
+            currentVisualizationComponent,
+            visualizationData,
+            isGenerating,
+            visualizationContainer,
+            aiInsights,
+            generateVisualization,
+            updateVisualizationData,
+            exportVisualization,
+            generateAIInsight
+        };
+    }
+};
+</script>
+
+<style scoped>
+.visualization-engine {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.visualization-controls {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+select,
+button {
+    padding: 10px 15px;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+    background: #f0f0f0;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+select:hover,
+button:hover {
+    background: #e0e0e0;
+}
+
+.visualization-container {
+    min-height: 400px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.visualization-export {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.visualization-export button {
+    background: #4CAF50;
+    color: white;
+    border: none;
+}
+
+.visualization-export button:hover {
+    background: #45a049;
+}
+
+.visualization-export button:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+}
+</style>
+

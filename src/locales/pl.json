@@ -1,0 +1,17 @@
+{
+    "appName": "F.H.U. Piotr Dądela 2.0 Zasilane dzięki PCE",
+    "navigation": {
+      "home": "Strona główna",
+      "login": "Logowanie",
+      "register": "Rejestracja",
+      "dashboard": "Panel",
+      "orderDashboard": "Panel Zleceń",
+      "adminDashboard": "Panel Administratora",
+      "aiDashboard": "Panel AI",
+      "workHours": "Godziny Pracy",
+      "updateProfile": "Aktualizuj Profil",
+      "profile": "Profil",
+      "settings": "Ustawienia",
+      "logout": "Wyloguj"
+    }
+  }

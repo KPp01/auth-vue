@@ -1,0 +1,85 @@
+--- Zawartość pliku: src/store/store.js ---
+import { createStore } from 'vuex';
+import { getAuth, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/firebase';
+
+export const store = createStore({
+  state: {
+    user: null,
+    fcmToken: '', // Token FCM dla powiadomień
+    loading: false,
+    error: null,
+  },
+  mutations: {
+    setUser(state, user) {
+      state.user = user;
+    },
+    setFcmToken(state, token) {
+      state.fcmToken = token;
+    },
+    setLoading(state, loading) {
+      state.loading = loading;
+    },
+    setError(state, error) {
+      state.error = error;
+    },
+  },
+  actions: {
+    setUser({ commit }, user) {
+      commit('setUser', user);
+    },
+    setFcmToken({ commit }, token) {
+      commit('setFcmToken', token);
+    },
+    async fetchUserData({ commit }, uid) {
+      commit('setLoading', true);
+      try {
+        const userDoc = await getDoc(doc(db, 'users', uid));
+        if (userDoc.exists()) {
+          commit('setUser', { id: uid, ...userDoc.data() });
+        } else {
+          throw new Error('User does not exist');
+        }
+      } catch (error) {
+        commit('setError', error.message);
+        console.error('Error fetching user data:', error);
+      } finally {
+        commit('setLoading', false);
+      }
+    },
+    async logout({ commit }) {
+      const auth = getAuth();
+      try {
+        await signOut(auth);
+        commit('setUser', null);
+      } catch (error) {
+        commit('setError', error.message);
+        console.error('Logout error:', error);
+      }
+    },
+    clearError({ commit }) {
+      commit('setError', null);
+    },
+  },
+  getters: {
+    getUser(state) {
+      return state.user;
+    },
+    getFcmToken(state) {
+      return state.fcmToken;
+    },
+    isAuthenticated(state) {
+      return !!state.user;
+    },
+    userRole(state) {
+      return state.user?.permissions || 'User';
+    },
+    isLoading(state) {
+      return state.loading;
+    },
+    getError(state) {
+      return state.error;
+    },
+  },
+});

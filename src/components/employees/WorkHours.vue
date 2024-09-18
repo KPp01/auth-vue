@@ -1,0 +1,131 @@
+<template>
+    <div class="work-hours-container">
+      <h2>Dodaj godziny pracy</h2>
+      <form @submit.prevent="submitWorkHours" class="work-hours-form">
+        <div class="p-field">
+          <label for="workDate">Data pracy</label>
+          <input type="date" id="workDate" v-model="workDate" class="input-field" required />
+        </div>
+        <div class="p-field">
+          <label for="startTime">Czas rozpoczęcia</label>
+          <input type="time" id="startTime" v-model="startTime" class="input-field" required />
+        </div>
+        <div class="p-field">
+          <label for="endTime">Czas zakończenia</label>
+          <input type="time" id="endTime" v-model="endTime" class="input-field" required />
+        </div>
+        <div class="p-field">
+          <label for="tasks">Opis zadania</label>
+          <textarea id="tasks" v-model="tasks" placeholder="Opisz, co robiłeś tego dnia" class="input-field" required></textarea>
+        </div>
+        <button type="submit" class="submit-btn" :disabled="loading">
+          <span v-if="loading" class="spinner"></span> Dodaj godziny pracy
+        </button>
+      </form>
+      <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
+    </div>
+  </template>
+  
+  <script>
+  import { doc, setDoc } from 'firebase/firestore';
+  import { db } from '@/firebase';
+  
+  export default {
+    name: 'WorkHours',
+    data() {
+      return {
+        workDate: '',
+        startTime: '',
+        endTime: '',
+        tasks: '',
+        errorMessage: '',
+        loading: false,
+      };
+    },
+    methods: {
+      async submitWorkHours() {
+        this.loading = true;
+        try {
+          const workHoursRef = doc(db, 'workHours', `${this.workDate}-${this.$store.state.user.id}`);
+          const workHoursData = {
+            userId: this.$store.state.user.id,
+            date: this.workDate,
+            startTime: this.startTime,
+            endTime: this.endTime,
+            tasks: this.tasks,
+            createdAt: new Date(),
+          };
+  
+          await setDoc(workHoursRef, workHoursData);
+          this.$router.push('/dashboard');
+        } catch (error) {
+          console.error('Błąd podczas zapisywania godzin pracy:', error);
+          this.errorMessage = `Błąd: ${error.message}`;
+        } finally {
+          this.loading = false;
+        }
+      },
+    },
+  };
+  </script>
+  
+  <style scoped>
+  .work-hours-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+  
+  .work-hours-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .input-field {
+    padding: 0.75rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+  }
+  
+  .submit-btn {
+    background-color: #42b983;
+    color: white;
+    padding: 0.75rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .submit-btn:disabled {
+    background-color: #ccc;
+  }
+  
+  .error-message {
+    color: red;
+    margin-top: 1rem;
+  }
+  
+  .spinner {
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #42b983;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  </style>
+  

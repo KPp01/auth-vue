@@ -1,0 +1,113 @@
+--- Zawartość pliku: src/router/index.js ---
+import { createRouter, createWebHistory } from 'vue-router';
+import { getAuth } from 'firebase/auth';
+import { store } from '@/store/store';
+
+// Importy komponentów
+import Home from '@/components/Home.vue';
+import Login from '@/components/Login.vue';
+import Register from '@/components/Register.vue';
+import Dashboard from '@/components/Dashboard.vue';
+import UpdateProfile from '@/components/UpdateProfile.vue';
+import AdminDashboard from '@/components/AdminDashboard.vue';
+import OrderDashboard from '@/components/orders/OrderDashboard.vue';
+import DashboardAi from '@/components/DashboardAi.vue';
+import WorkHours from '@/components/employees/WorkHours.vue';
+
+const routes = [
+  {
+    path: '/',
+    name: 'Home',
+    component: Home
+  },
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login
+  },
+  {
+    path: '/register',
+    name: 'Register',
+    component: Register
+  },
+  {
+    path: '/dashboard',
+    name: 'Dashboard',
+    component: Dashboard,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/update-profile',
+    name: 'UpdateProfile',
+    component: UpdateProfile,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/admin-dashboard',
+    name: 'AdminDashboard',
+    component: AdminDashboard,
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/order-dashboard',
+    name: 'OrderDashboard',
+    component: OrderDashboard,
+    meta: { requiresAuth: true, requiresManager: true }
+  },
+  {
+    path: '/ai-dashboard',
+    name: 'DashboardAi',
+    component: DashboardAi,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/work-hours',
+    name: 'WorkHours',
+    component: WorkHours,
+    meta: { requiresAuth: true }
+  }
+];
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes,
+});
+
+router.beforeEach(async (to, from, next) => {
+  const auth = getAuth();
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+  const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
+  const requiresManager = to.matched.some(record => record.meta.requiresManager);
+  const isAuthenticated = auth.currentUser;
+
+  if (requiresAuth && !isAuthenticated) {
+    next('/login');
+  } else if (requiresAdmin || requiresManager) {
+    if (!isAuthenticated) {
+      next('/login');
+    } else {
+      if (!store.getters.isAuthenticated) {
+        try {
+          await store.dispatch('fetchUserData', auth.currentUser.uid);
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          next('/login');
+          return;
+        }
+      }
+      const userRole = store.getters.userRole;
+
+      if (requiresAdmin && userRole === 'Administrator') {
+        next();
+      } else if (requiresManager && (userRole === 'Manager' || userRole === 'Administrator')) {
+        next();
+      } else {
+        next('/dashboard');
+      }
+    }
+  } else {
+    next();
+  }
+});
+
+export default router;

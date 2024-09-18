@@ -1,0 +1,171 @@
+--- Zawartość pliku: src/components/charts/BarChart.vue ---
+<template>
+    <div class="chart-container">
+      <canvas ref="barCanvas"></canvas>
+    </div>
+  </template>
+  
+  <script>
+  import { ref, onMounted } from 'vue';
+  import { Chart, BarController, BarElement, Tooltip, Legend } from 'chart.js';
+  
+  Chart.register(BarController, BarElement, Tooltip, Legend);
+  
+  export default {
+    name: 'BarChart',
+    props: {
+      chartData: {
+        type: Object,
+        required: true
+      },
+      options: {
+        type: Object,
+        default: () => ({})
+      }
+    },
+    setup(props) {
+      const barCanvas = ref(null);
+      let barChart = null;
+  
+      onMounted(() => {
+        if (barCanvas.value) {
+          barChart = new Chart(barCanvas.value, {
+            type: 'bar',
+            data: props.chartData,
+            options: props.options
+          });
+        }
+      });
+  
+      return {
+        barCanvas
+      };
+    }
+  };
+  </script>
+  
+  <style scoped>
+  .chart-container {
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+  </style>
+  
+
+--- Zawartość pliku: src/components/charts/LineChart.vue ---
+<template>
+    <div class="chart-container">
+      <canvas ref="lineCanvas"></canvas>
+    </div>
+  </template>
+  
+  <script>
+  import { ref, onMounted } from 'vue';
+  import { Chart, LineController, LineElement, PointElement, Tooltip, Legend } from 'chart.js';
+  
+  Chart.register(LineController, LineElement, PointElement, Tooltip, Legend);
+  
+  export default {
+    name: 'LineChart',
+    props: {
+      chartData: {
+        type: Object,
+        required: true
+      },
+      options: {
+        type: Object,
+        default: () => ({})
+      }
+    },
+    setup(props) {
+      const lineCanvas = ref(null);
+      let lineChart = null;
+  
+      onMounted(() => {
+        if (lineCanvas.value) {
+          lineChart = new Chart(lineCanvas.value, {
+            type: 'line',
+            data: props.chartData,
+            options: props.options
+          });
+        }
+      });
+  
+      return {
+        lineCanvas
+      };
+    }
+  };
+  </script>
+  
+  <style scoped>
+  .chart-container {
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+  </style>
+  
+
+--- Zawartość pliku: src/components/charts/PieChart.vue ---
+<template>
+    <div class="chart-container">
+      <canvas ref="pieCanvas"></canvas>
+    </div>
+  </template>
+  
+  <script>
+  import { onMounted, ref } from 'vue';
+  import { Chart, PieController, ArcElement, Tooltip, Legend } from 'chart.js';
+  
+  // Rejestracja komponentów Chart.js
+  Chart.register(PieController, ArcElement, Tooltip, Legend);
+  
+  export default {
+    name: 'PieChart',
+    props: {
+      chartData: {
+        type: Object,
+        required: true,
+        validator(data) {
+          return data.labels && data.datasets;
+        },
+      },
+      options: {
+        type: Object,
+        default: () => ({}),
+      },
+    },
+    setup(props) {
+      const pieCanvas = ref(null);
+      let pieChart = null;
+  
+      onMounted(() => {
+        if (pieCanvas.value) {
+          pieChart = new Chart(pieCanvas.value, {
+            type: 'pie',
+            data: props.chartData,
+            options: props.options,
+          });
+        }
+      });
+  
+      return {
+        pieCanvas,
+      };
+    },
+  };
+  </script>
+  
+  <style scoped>
+  .chart-container {
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+  </style>
+  

@@ -1,0 +1,21 @@
+import { getToken } from 'firebase/messaging';
+import { messaging } from '@/firebase'; // Import messaging from firebase.js
+import { logError } from '@/logger';
+
+/**
+ * Pobierz token FCM dla powiadomień.
+ * Zapisz token w bazie danych lub backendzie, jeśli to konieczne.
+ */
+export async function getMessagingToken() {
+  try {
+    const token = await getToken(messaging, { vapidKey: import.meta.env.VITE_VAPID_KEY });
+    if (token) {
+      console.log('Token FCM:', token);
+      // Zapisz token FCM w backendzie (dodaj funkcję do zapisu tokena)
+    } else {
+      console.warn('Nie uzyskano tokena powiadomień.');
+    }
+  } catch (error) {
+    logError('Błąd podczas pobierania tokena FCM:', error);
+  }
+}

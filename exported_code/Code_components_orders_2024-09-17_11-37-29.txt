@@ -1,0 +1,1963 @@
+--- Zawartość pliku: src/components/orders/Notifications.vue ---
+<template>
+    <div class="notifications-container">
+      <transition-group name="slide" tag="div">
+        <div v-for="(notification, index) in notifications" :key="notification.id" class="notification" :class="notification.type">
+          <div class="notification-content">
+            <i :class="getIcon(notification.type)" class="notification-icon"></i>
+            <div class="notification-message">
+              <strong>{{ notification.title }}</strong>
+              <p>{{ notification.message }}</p>
+            </div>
+          </div>
+          <button class="close-button" @click="removeNotification(index)">&#10005;</button>
+        </div>
+      </transition-group>
+    </div>
+  </template>
+  
+  <script>
+  let nextNotificationId = 0;
+  
+  export default {
+    data() {
+      return {
+        notifications: []
+      };
+    },
+    methods: {
+      addNotification({ type = 'info', title = 'Powiadomienie', message = 'Treść powiadomienia', duration = 5000 }) {
+        const id = nextNotificationId++;
+        this.notifications.push({ id, type, title, message });
+  
+        // Usuwanie powiadomienia po określonym czasie
+        setTimeout(() => {
+          this.removeNotificationById(id);
+        }, duration);
+      },
+      removeNotification(index) {
+        this.notifications.splice(index, 1);
+      },
+      removeNotificationById(id) {
+        const index = this.notifications.findIndex(notification => notification.id === id);
+        if (index !== -1) {
+          this.removeNotification(index);
+        }
+      },
+      getIcon(type) {
+        switch (type) {
+          case 'success': return 'pi pi-check-circle';
+          case 'error': return 'pi pi-times-circle';
+          case 'warning': return 'pi pi-exclamation-triangle';
+          case 'info': return 'pi pi-info-circle';
+          default: return 'pi pi-info-circle';
+        }
+      },
+      sendPushNotification(title, body) {
+        if ('Notification' in window) {
+          Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+              new Notification(title, { body });
+            }
+          });
+        }
+      }
+    },
+    mounted() {
+      // Przykładowe powiadomienie po załadowaniu komponentu
+      this.addNotification({
+        type: 'info',
+        title: 'Witaj w systemie',
+        message: 'To jest Twoje pierwsze powiadomienie!',
+        duration: 7000
+      });
+    }
+  };
+  </script>
+  
+  <style scoped>
+  .notifications-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 300px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .notification {
+    background-color: var(--notification-bg);
+    color: var(--notification-text);
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+  
+  .notification.success {
+    border-left: 5px solid var(--success-color);
+  }
+  
+  .notification.error {
+    border-left: 5px solid var(--error-color);
+  }
+  
+  .notification.warning {
+    border-left: 5px solid var(--warning-color);
+  }
+  
+  .notification.info {
+    border-left: 5px solid var(--info-color);
+  }
+  
+  .notification-content {
+    display: flex;
+    align-items: center;
+  }
+  
+  .notification-icon {
+    font-size: 1.5rem;
+    margin-right: 10px;
+  }
+  
+  .notification-message {
+    max-width: 200px;
+  }
+  
+  .notification-message strong {
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+  
+  .notification-message p {
+    font-size: 0.9rem;
+    margin: 0;
+  }
+  
+  .close-button {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: var(--notification-text);
+    cursor: pointer;
+  }
+  
+  .close-button:hover {
+    color: var(--close-button-hover);
+  }
+  
+  .slide-enter-active, .slide-leave-active {
+    transition: all 0.3s ease;
+  }
+  
+  .slide-enter, .slide-leave-to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  </style>
+  
+
+--- Zawartość pliku: src/components/orders/OrderAttachments.vue ---
+<template>
+  <div class="order-attachments">
+    <h3>Załączniki</h3>
+    <div v-for="(file, index) in files" :key="index" class="file-item">
+      <input type="file" @change="onFileSelected($event, index)" class="file-input" />
+      <button @click="removeFile(index)" class="remove-btn">
+        <i class="pi pi-trash"></i> Usuń
+      </button>
+    </div>
+    <button @click="addFile" class="add-btn">
+      <i class="pi pi-plus"></i> Dodaj Załącznik
+    </button>
+  </div>
+</template>
+
+<script>
+export default {
+  props: {
+    modelValue: Array,
+  },
+  computed: {
+    files: {
+      get() {
+        return this.modelValue;
+      },
+      set(value) {
+        this.$emit('update:modelValue', value);
+      },
+    },
+  },
+  methods: {
+    onFileSelected(event, index) {
+      const file = event.target.files[0];
+      this.$emit('file-selected', { file, index });
+    },
+    addFile() {
+      this.files.push({ file: null });
+    },
+    removeFile(index) {
+      this.files.splice(index, 1);
+    },
+  },
+};
+</script>
+
+<style scoped>
+.order-attachments {
+  background: var(--card-bg-light);
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: var(--box-shadow);
+  margin-bottom: 1.5rem;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.file-input {
+  flex: 1;
+}
+
+.add-btn,
+.remove-btn {
+  padding: 0.75rem 1.25rem;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.add-btn i,
+.remove-btn i {
+  margin-right: 0.5rem;
+}
+
+.add-btn:hover,
+.remove-btn:hover {
+  background-color: var(--primary-hover-color);
+  transform: scale(1.05);
+}
+</style>
+
+
+--- Zawartość pliku: src/components/orders/OrderDashboard.vue ---
+<template>
+  <div class="order-dashboard">
+    <aside class="dashboard-nav">
+      <h2 class="dashboard-title">Panel Zleceń</h2>
+      <ul>
+        <li @click="setActive('OrderForm')" :class="{ active: activeComponent === 'OrderForm' }">
+          <i class="pi pi-plus"></i> Dodaj Zlecenie
+        </li>
+        <li @click="setActive('OrdersList')" :class="{ active: activeComponent === 'OrdersList' }">
+          <i class="pi pi-list"></i> Lista Zleceń
+        </li>
+        <li @click="setActive('OrderDetails')" :class="{ active: activeComponent === 'OrderDetails' }">
+          <i class="pi pi-info-circle"></i> Szczegóły Zlecenia
+        </li>
+        <li @click="setActive('OrderTasks')" :class="{ active: activeComponent === 'OrderTasks' }">
+          <i class="pi pi-tasks"></i> Zadania
+        </li>
+        <li @click="setActive('OrderEmployees')" :class="{ active: activeComponent === 'OrderEmployees' }">
+          <i class="pi pi-users"></i> Pracownicy
+        </li>
+        <li @click="setActive('OrderMaterials')" :class="{ active: activeComponent === 'OrderMaterials' }">
+          <i class="pi pi-box"></i> Materiały
+        </li>
+        <li @click="setActive('OrderTools')" :class="{ active: activeComponent === 'OrderTools' }">
+          <i class="pi pi-wrench"></i> Narzędzia
+        </li>
+        <li @click="setActive('OrderLocation')" :class="{ active: activeComponent === 'OrderLocation' }">
+          <i class="pi pi-map-marker"></i> Lokalizacja
+        </li>
+        <li @click="setActive('OrderAttachments')" :class="{ active: activeComponent === 'OrderAttachments' }">
+          <i class="pi pi-paperclip"></i> Załączniki
+        </li>
+        <li @click="setActive('OrderRemarks')" :class="{ active: activeComponent === 'OrderRemarks' }">
+          <i class="pi pi-comment"></i> Uwagi
+        </li>
+      </ul>
+    </aside>
+
+    <section class="dashboard-content">
+      <transition name="slide-fade" mode="out-in">
+        <component :is="activeComponent" key="activeComponent"></component>
+      </transition>
+    </section>
+  </div>
+</template>
+
+<script>
+import OrderForm from '@/components/orders/OrderForm.vue';
+import OrdersList from '@/components/orders/OrdersList.vue';
+import OrderDetails from '@/components/orders/OrderDetails.vue';
+import OrderTasks from '@/components/orders/OrderTasks.vue';
+import OrderEmployees from '@/components/orders/OrderEmployees.vue';
+import OrderMaterials from '@/components/orders/OrderMaterials.vue';
+import OrderTools from '@/components/orders/OrderTools.vue';
+import OrderLocation from '@/components/orders/OrderLocation.vue';
+import OrderAttachments from '@/components/orders/OrderAttachments.vue';
+import OrderRemarks from '@/components/orders/OrderRemarks.vue';
+
+export default {
+  data() {
+    return {
+      activeComponent: localStorage.getItem('lastActiveComponent') || 'OrderForm',
+    };
+  },
+  components: {
+    OrderForm,
+    OrdersList,
+    OrderDetails,
+    OrderTasks,
+    OrderEmployees,
+    OrderMaterials,
+    OrderTools,
+    OrderLocation,
+    OrderAttachments,
+    OrderRemarks,
+  },
+  methods: {
+    setActive(component) {
+      this.activeComponent = component;
+      localStorage.setItem('lastActiveComponent', component);
+    },
+  },
+};
+</script>
+
+<style scoped>
+.order-dashboard {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--background-light);
+  font-family: var(--font-family);
+}
+
+/* Nawigacja po lewej stronie */
+.dashboard-nav {
+  width: 260px;
+  background-color: var(--navbar-bg-color);
+  padding: 20px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-title {
+  font-size: 1.8rem;
+  color: var(--text-color);
+  margin-bottom: 20px;
+  text-align: center;
+  font-weight: 700;
+  border-bottom: 2px solid var(--text-color);
+}
+
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+li {
+  padding: 12px 15px;
+  color: var(--text-color);
+  cursor: pointer;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+li:hover {
+  background-color: var(--hover-bg-color);
+}
+
+li.active {
+  background-color: var(--primary-bg-color);
+}
+
+.dashboard-content {
+  flex: 1;
+  padding: 20px;
+  background-color: var(--card-bg-light);
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .dashboard-nav {
+    width: 100%;
+    padding: 15px;
+  }
+
+  .dashboard-content {
+    padding: 10px;
+  }
+}
+</style>
+
+
+--- Zawartość pliku: src/components/orders/OrderDetails.vue ---
+<template>
+  <div class="order-details">
+    <label for="order-name">Nazwa Zlecenia</label>
+    <input
+      type="text"
+      id="order-name"
+      v-model="details.name"
+      class="form-input"
+      required
+    />
+    <span v-if="!details.name && submitted" class="error-message">
+      Nazwa zlecenia jest wymagana
+    </span>
+
+    <label for="client-selection">Wybierz Klienta</label>
+    <select v-model="selectedClient" id="client-selection" class="form-input">
+      <option v-for="client in clients" :key="client.id" :value="client.id">
+        {{ client.name }}
+      </option>
+      <option value="new">Dodaj nowego klienta</option>
+    </select>
+
+    <!-- Wpisywanie danych nowego klienta -->
+    <div v-if="selectedClient === 'new'" class="new-client-form">
+      <label for="client-first-name">Imię Klienta</label>
+      <input
+        type="text"
+        id="client-first-name"
+        v-model="newClient.firstName"
+        class="form-input"
+        required
+      />
+
+      <label for="client-last-name">Nazwisko Klienta</label>
+      <input
+        type="text"
+        id="client-last-name"
+        v-model="newClient.lastName"
+        class="form-input"
+        required
+      />
+
+      <label for="client-address">Adres Klienta</label>
+      <input
+        type="text"
+        id="client-address"
+        v-model="newClient.address"
+        class="form-input"
+        required
+      />
+
+      <label for="client-phone">Telefon Klienta</label>
+      <input
+        type="tel"
+        id="client-phone"
+        v-model="newClient.phone"
+        class="form-input"
+        required
+      />
+
+      <label for="client-email">Email Klienta</label>
+      <input
+        type="email"
+        id="client-email"
+        v-model="newClient.email"
+        class="form-input"
+        required
+      />
+    </div>
+
+    <span v-if="!clientIsSelected && submitted" class="error-message">
+      Dane klienta są wymagane
+    </span>
+  </div>
+</template>
+
+<script>
+import { ref, onMounted } from "vue";
+import { collection, addDoc, getDocs } from "firebase/firestore"; // Zakładając, że używasz Firebase
+
+export default {
+  props: {
+    modelValue: {
+      type: Object,
+      required: true,
+    },
+    submitted: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  setup(props, { emit }) {
+    const clients = ref([]); // Lista klientów
+    const selectedClient = ref(null); // Wybrany klient
+    const newClient = ref({ firstName: "", lastName: "", address: "", phone: "", email: "" }); // Dane nowego klienta
+    const clientIsSelected = ref(false); // Sprawdzenie, czy klient jest wybrany
+
+    // Funkcja ładowania klientów z bazy danych
+    const loadClients = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "clients")); // Pobieranie danych z kolekcji "clients"
+        clients.value = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+      } catch (error) {
+        console.error("Błąd ładowania klientów: ", error);
+      }
+    };
+
+    // Dodanie nowego klienta do bazy
+    const saveNewClient = async () => {
+      try {
+        const docRef = await addDoc(collection(db, "clients"), {
+          firstName: newClient.value.firstName,
+          lastName: newClient.value.lastName,
+          address: newClient.value.address,
+          phone: newClient.value.phone,
+          email: newClient.value.email,
+        });
+        // Zapisanie ID nowego klienta
+        selectedClient.value = docRef.id;
+        clients.value.push({ id: docRef.id, ...newClient.value });
+      } catch (error) {
+        console.error("Błąd dodawania klienta: ", error);
+      }
+    };
+
+    // Aktualizowanie wybranych danych klienta
+    const updateClientData = () => {
+      if (selectedClient.value === "new") {
+        if (
+          newClient.value.firstName &&
+          newClient.value.lastName &&
+          newClient.value.address &&
+          newClient.value.phone &&
+          newClient.value.email
+        ) {
+          saveNewClient(); // Zapis nowego klienta do bazy
+        }
+      } else if (selectedClient.value) {
+        clientIsSelected.value = true;
+      }
+    };
+
+    onMounted(loadClients); // Ładowanie klientów po załadowaniu komponentu
+
+    return {
+      clients,
+      selectedClient,
+      newClient,
+      clientIsSelected,
+      updateClientData,
+    };
+  },
+  computed: {
+    details: {
+      get() {
+        return this.modelValue;
+      },
+      set(value) {
+        this.$emit("update:modelValue", value);
+      },
+    },
+  },
+};
+</script>
+
+<style scoped>
+/* Stylizacja formularza */
+.order-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2rem;
+  background-color: var(--card-bg-light);
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.3s ease-in-out;
+}
+
+.order-details label {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-color);
+}
+
+.form-input {
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 2px solid var(--primary-color);
+  border-radius: 8px;
+  outline: none;
+  background-color: var(--input-background-light);
+  color: var(--text-light);
+  transition: border-color 0.3s, background-color 0.3s, color 0.3s, box-shadow 0.3s;
+}
+
+/* Stylizacja dla ciemnego motywu */
+[data-theme="dark"] .form-input {
+  background-color: var(--input-background-dark);
+  color: var(--text-dark);
+}
+
+.form-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.3); /* Zielona poświata na focus */
+}
+
+.error-message {
+  color: #dc3545;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+.new-client-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .order-details {
+    padding: 1rem;
+  }
+
+  .form-input {
+    font-size: 0.875rem;
+  }
+}
+</style>
+
+
+--- Zawartość pliku: src/components/orders/OrderEmployees.vue ---
+<template>
+  <div class="order-employees">
+    <label for="employees">Osoby Realizujące</label>
+    <input type="text" id="employees" v-model="employees" />
+  </div>
+</template>
+
+<script>
+export default {
+  props: {
+    modelValue: {
+      type: Array,
+      required: true
+    }
+  },
+  computed: {
+    employees: {
+      get() {
+        return this.modelValue;
+      },
+      set(value) {
+        this.$emit('update:modelValue', value);
+      }
+    }
+  }
+};
+</script>
+
+<style scoped>
+.order-employees {
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.order-employees input {
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 2px solid #ccc;
+  border-radius: 5px;
+}
+</style>
+
+
+--- Zawartość pliku: src/components/orders/OrderForm.vue ---
+<template>
+  <div class="order-form-container">
+    <h1 class="form-title">Dodaj Zlecenie</h1>
+    <form @submit.prevent="submitOrder" class="order-form">
+      <OrderNumber :orderNumber="orderNumber" />
+      <OrderDetails v-model="orderDetails" :submitted="submitted" />
+      <OrderEmployees v-model="employees" />
+      <OrderLocation v-model="location" />
+      <OrderTasks v-model="tasks" :submitted="submitted" />
+      <OrderMaterials v-model="materials" />
+      <OrderTools v-model="tools" />
+      <OrderAttachments v-model="attachments" />
+      <OrderRemarks v-model:remarks="remarks" />
+      <button type="submit" class="submit-btn">Zatwierdź Zlecenie</button>
+    </form>
+  </div>
+</template>
+
+<script>
+import { ref } from 'vue';
+import OrderNumber from './OrderNumber.vue';
+import OrderDetails from './OrderDetails.vue';
+import OrderEmployees from './OrderEmployees.vue';
+import OrderLocation from './OrderLocation.vue';
+import OrderTasks from './OrderTasks.vue';
+import OrderMaterials from './OrderMaterials.vue';
+import OrderTools from './OrderTools.vue';
+import OrderAttachments from './OrderAttachments.vue';
+import OrderRemarks from './OrderRemarks.vue';
+import { validateOrder } from '@/modules/orders/orderValidation';
+import orderService from '@/modules/orders/orderService';
+
+export default {
+  components: {
+    OrderNumber,
+    OrderDetails,
+    OrderEmployees,
+    OrderLocation,
+    OrderTasks,
+    OrderMaterials,
+    OrderTools,
+    OrderAttachments,
+    OrderRemarks,
+  },
+  setup() {
+    const orderNumber = ref('2024/007');
+    const orderDetails = ref({});
+    const employees = ref([]);
+    const location = ref({
+      address: '',
+      pins: [],
+    });
+    const tasks = ref([]);
+    const materials = ref([]);
+    const tools = ref([]);
+    const attachments = ref([]);
+    const remarks = ref('');
+    const submitted = ref(false);
+
+    const submitOrder = async () => {
+      submitted.value = true;
+      const order = {
+        orderNumber: orderNumber.value,
+        orderDetails: orderDetails.value,
+        employees: employees.value,
+        location: location.value,
+        tasks: tasks.value,
+        materials: materials.value,
+        tools: tools.value,
+        attachments: attachments.value,
+        remarks: remarks.value,
+      };
+
+      const validationResult = validateOrder(order);
+      if (validationResult.isValid) {
+        try {
+          await orderService.saveOrder(order);
+          alert('Zlecenie zostało pomyślnie dodane!');
+        } catch (error) {
+          console.error('Błąd podczas zapisu zlecenia:', error);
+        }
+      } else {
+        console.error('Błędy walidacji:', validationResult.errors);
+      }
+    };
+
+    return {
+      orderNumber,
+      orderDetails,
+      employees,
+      location,
+      tasks,
+      materials,
+      tools,
+      attachments,
+      remarks,
+      submitted,
+      submitOrder,
+    };
+  },
+};
+</script>
+
+<style scoped>
+.order-form-container {
+  padding: 20px;
+  background-color: var(--card-bg-light);
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transition: background-color 0.3s ease-in-out;
+}
+
+.form-title {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 1.8rem;
+  color: var(--primary-color);
+}
+
+.order-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+input,
+textarea,
+button {
+  font-size: 1rem;
+  padding: 0.75rem;
+  border: 2px solid var(--primary-color);
+  border-radius: 5px;
+  outline: none;
+  transition: border-color 0.3s, background-color 0.3s;
+}
+
+input:focus,
+textarea:focus {
+  border-color: var(--primary-hover-color);
+}
+
+button {
+  background-color: var(--button-bg-light);
+  color: var(--button-text-color);
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+button:hover {
+  background-color: var(--primary-hover-color);
+  transform: scale(1.05);
+}
+
+@media (max-width: 768px) {
+  .order-form {
+    padding: 1rem;
+  }
+
+  button {
+    width: 100%;
+    padding: 1rem;
+  }
+}
+</style>
+
+
+--- Zawartość pliku: src/components/orders/OrderLocation.vue ---
+<template>
+  <div class="order-location">
+    <input
+      id="pac-input"
+      class="controls"
+      type="text"
+      placeholder="Wyszukaj lokalizację"
+    />
+    <select @change="changeMapType($event)" class="map-type-selector">
+      <option value="roadmap">Mapa drogowa</option>
+      <option value="satellite">Satelita</option>
+      <option value="hybrid">Hybrydowa</option>
+      <option value="terrain">Terenowa</option>
+    </select>
+    <div id="map" class="map"></div>
+    <button @click="enableAddPin" class="add-pin-btn">Dodaj Pineskę</button>
+    <button @click="clearMarkers" class="remove-all-btn">Usuń wszystkie pineski</button>
+    <div v-if="markers.length > 0" class="marker-list">
+      <h3>Lista Pinesek</h3>
+      <ul>
+        <li v-for="(marker, index) in markers" :key="index">
+          <strong>{{ marker.title }}</strong> - {{ marker.address }}
+          <br>Koordynaty: ({{ marker.position.lat }}, {{ marker.position.lng }})
+          <button @click="removeMarker(index)">Usuń</button>
+        </li>
+      </ul>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  props: {
+    modelValue: {
+      type: Object,
+      required: true,
+    },
+  },
+  data() {
+    return {
+      map: null,
+      geocoder: null,
+      markers: [],
+      markerBeingAdded: false,
+      searchBox: null,
+      lastCenter: null,
+      lastZoom: 10,
+    };
+  },
+  methods: {
+    loadGoogleMaps() {
+      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+      if (!apiKey) {
+        console.error('API key is missing or undefined.');
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap&libraries=places&v=weekly`;
+      script.async = true;
+      script.defer = true;
+      script.onerror = () => {
+        console.error('Google Maps API nie zostało poprawnie załadowane.');
+      };
+      document.head.appendChild(script);
+    },
+    initMap() {
+      const mapCenter = this.lastCenter || { lat: 53.59149278201481, lng: 17.898647269517852 };
+
+      this.map = new google.maps.Map(document.getElementById('map'), {
+        center: mapCenter,
+        zoom: this.lastZoom,
+        mapTypeId: 'roadmap',
+      });
+
+      this.geocoder = new google.maps.Geocoder();
+      this.map.addListener('click', (event) => {
+        if (this.markerBeingAdded) {
+          const latLng = event.latLng;
+          this.geocoder.geocode({ location: latLng }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+              this.addMarker(latLng, results[0].formatted_address);
+            } else {
+              console.error('Błąd geokodowania: ' + status);
+            }
+          });
+          this.markerBeingAdded = false;
+        }
+      });
+
+      const input = document.getElementById('pac-input');
+      this.searchBox = new google.maps.places.SearchBox(input);
+      this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(input);
+
+      this.searchBox.addListener('places_changed', () => {
+        const places = this.searchBox.getPlaces();
+        if (places.length === 0) return;
+
+        const bounds = new google.maps.LatLngBounds();
+        places.forEach((place) => {
+          if (!place.geometry || !place.geometry.location) return;
+
+          const latLng = place.geometry.location;
+          const address = place.formatted_address || place.name;
+          this.addMarker(latLng, address);
+
+          if (place.geometry.viewport) {
+            bounds.union(place.geometry.viewport);
+          } else {
+            bounds.extend(place.geometry.location);
+          }
+        });
+        this.map.fitBounds(bounds);
+      });
+    },
+    enableAddPin() {
+      this.markerBeingAdded = true;
+    },
+    addMarker(latLng, address) {
+      const marker = new google.maps.Marker({
+        position: latLng,
+        map: this.map,
+        title: `Pineska ${this.markers.length + 1}`,
+      });
+      const newMarker = {
+        title: `Pineska ${this.markers.length + 1}`,
+        position: { lat: latLng.lat(), lng: latLng.lng() },
+        address: address,
+        markerInstance: marker,
+      };
+      this.markers.push(newMarker);
+      this.$emit('update:modelValue', { address, pins: this.markers });
+    },
+    removeMarker(index) {
+      this.markers[index].markerInstance.setMap(null);
+      this.markers.splice(index, 1);
+      this.$emit('update:modelValue', { address: this.markers.length ? this.markers[0].address : '', pins: this.markers });
+    },
+    clearMarkers() {
+      this.markers.forEach((marker) => marker.markerInstance.setMap(null));
+      this.markers = [];
+      this.$emit('update:modelValue', { address: '', pins: [] });
+    },
+    changeMapType(event) {
+      this.map.setMapTypeId(event.target.value);
+    },
+  },
+  mounted() {
+    this.loadGoogleMaps();
+    window.initMap = this.initMap;
+  },
+};
+</script>
+
+<style scoped>
+.map {
+  width: 100%;
+  height: 400px;
+  margin-top: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+}
+
+.add-pin-btn,
+.remove-all-btn {
+  margin-top: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.add-pin-btn:hover,
+.remove-all-btn:hover {
+  background-color: var(--primary-hover-color);
+}
+
+.marker-list {
+  margin-top: 1rem;
+}
+
+.marker-list ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+.marker-list li {
+  margin-bottom: 0.5rem;
+}
+
+button {
+  background-color: #ff6b6b;
+  border: none;
+  padding: 0.3rem 0.6rem;
+  border-radius: 3px;
+  color: white;
+  cursor: pointer;
+  margin-left: 10px;
+}
+
+button:hover {
+  background-color: #ff4c4c;
+}
+
+#pac-input {
+  margin-top: 10px;
+  padding: 5px;
+  width: 300px;
+}
+
+.map-type-selector {
+  margin-top: 10px;
+  padding: 5px;
+  width: 200px;
+}
+</style>
+
+
+--- Zawartość pliku: src/components/orders/OrderMaterials.vue ---
+<template>
+  <div class="order-materials">
+    <h3>Materiały</h3>
+    <div v-for="(material, index) in materials" :key="index" class="material-item">
+      <textarea
+        v-model="materials[index]"
+        rows="2"
+        class="material-input"
+        :placeholder="'Materiał ' + (index + 1)"
+      ></textarea>
+      <button @click="removeMaterial(index)" class="remove-btn">
+        <i class="pi pi-trash"></i> Usuń
+      </button>
+    </div>
+    <button @click="addMaterial" class="add-btn">
+      <i class="pi pi-plus"></i> Dodaj Materiał
+    </button>
+  </div>
+</template>
+
+<script>
+export default {
+  props: {
+    modelValue: Array,
+  },
+  computed: {
+    materials: {
+      get() {
+        return this.modelValue;
+      },
+      set(value) {
+        this.$emit('update:modelValue', value);
+      },
+    },
+  },
+  methods: {
+    addMaterial() {
+      this.materials.push('');
+    },
+    removeMaterial(index) {
+      this.materials.splice(index, 1);
+    },
+  },
+};
+</script>
+
+<style scoped>
+.order-materials {
+  background: var(--card-bg-light);
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: var(--box-shadow);
+  margin-bottom: 1.5rem;
+}
+
+.material-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.material-input {
+  flex: 1;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 2px solid var(--primary-color);
+  border-radius: 8px;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.material-input:focus {
+  border-color: var(--primary-hover-color);
+  box-shadow: 0 0 10px var(--primary-hover-color);
+}
+
+.add-btn,
+.remove-btn {
+  padding: 0.75rem 1.25rem;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.add-btn i,
+.remove-btn i {
+  margin-right: 0.5rem;
+}
+
+.add-btn:hover,
+.remove-btn:hover {
+  background-color: var(--primary-hover-color);
+  transform: scale(1.05);
+}
+</style>
+
+
+--- Zawartość pliku: src/components/orders/OrderNumber.vue ---
+<template>
+  <div class="order-number">
+    <label for="order-number">Numer Zlecenia</label>
+    <input type="text" id="order-number" :value="orderNumber" disabled class="order-number-input" />
+  </div>
+</template>
+
+<script>
+export default {
+  props: {
+    orderNumber: {
+      type: String,
+      required: true
+    }
+  }
+};
+</script>
+
+<style scoped>
+.order-number {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.order-number-input {
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 2px solid #ccc;
+  border-radius: 5px;
+  background-color: #f9f9f9;
+}
+
+.order-number-input:disabled {
+  color: #666;
+  background-color: #e9e9e9;
+}
+</style>
+
+
+--- Zawartość pliku: src/components/orders/OrderRemarks.vue ---
+<template>
+  <div class="order-remarks">
+    <h3>Uwagi Pracodawcy</h3>
+    <textarea :value="remarks" @input="onInput" rows="3" placeholder="Wprowadź uwagi"></textarea>
+  </div>
+</template>
+
+<script>
+export default {
+  props: {
+    remarks: {
+      type: String,
+      required: true
+    }
+  },
+  methods: {
+    // Emitujemy zdarzenie `update:modelValue` zgodnie z zaleceniami Vue 3
+    onInput(event) {
+      this.$emit('update:remarks', event.target.value);
+    }
+  }
+};
+</script>
+
+<style scoped>
+.order-remarks {
+  margin-bottom: 1.5rem;
+}
+
+textarea {
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 2px solid #ccc;
+  border-radius: 5px;
+  width: 100%;
+  box-sizing: border-box;
+}
+</style>
+
+
+--- Zawartość pliku: src/components/orders/OrderTasks.vue ---
+<template>
+  <div class="order-tasks">
+    <label for="task" class="task-label">Szczegóły Zadania</label>
+    <input
+      type="text"
+      id="task"
+      v-model="task.details"
+      placeholder="Wprowadź szczegóły zadania"
+      class="task-input"
+      :class="{ 'input-error': !task.details && submitted }"
+    />
+    <span v-if="!task.details && submitted" class="error-message">Zadanie jest wymagane</span>
+
+    <div class="task-status">
+      <label>Status zadania:</label>
+      <select v-model="task.status" class="status-select">
+        <option value="do realizacji">Do realizacji</option>
+        <option value="w realizacji">W realizacji</option>
+        <option value="zrealizowane">Zrealizowane</option>
+      </select>
+    </div>
+
+    <div class="subtask-container">
+      <h4 class="subtask-header">Podpunkty zadania</h4>
+      <transition-group name="fade" tag="ul" class="subtask-list">
+        <li v-for="(subtask, index) in task.subtasks" :key="subtask.id" class="subtask-item">
+          <div class="subtask-content">
+            <input
+              type="text"
+              v-model="subtask.name"
+              class="subtask-input"
+              :placeholder="'Podpunkt ' + (index + 1)"
+            />
+            <select v-model="subtask.status" class="subtask-status">
+              <option value="do realizacji">Do realizacji</option>
+              <option value="w realizacji">W realizacji</option>
+              <option value="zrealizowane">Zrealizowane</option>
+            </select>
+            <button @click="removeSubtask(subtask.id)" class="remove-btn" aria-label="Usuń podpunkt">
+              <i class="pi pi-trash"></i> Usuń
+            </button>
+          </div>
+        </li>
+      </transition-group>
+    </div>
+
+    <button @click="addSubtask" class="add-btn" aria-label="Dodaj podpunkt">
+      <i class="pi pi-plus"></i> Dodaj Podpunkt
+    </button>
+  </div>
+</template>
+
+<script>
+export default {
+  props: {
+    modelValue: {
+      type: Object,
+      required: true,
+    },
+    submitted: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  computed: {
+    task: {
+      get() {
+        return this.modelValue;
+      },
+      set(value) {
+        this.$emit('update:modelValue', value);
+      },
+    },
+  },
+  methods: {
+    addSubtask() {
+      const newSubtask = {
+        id: Date.now(),
+        name: '',
+        status: 'do realizacji',
+      };
+      if (!this.task.subtasks) {
+        this.$set(this.task, 'subtasks', []);
+      }
+      this.task.subtasks.push(newSubtask);
+    },
+    removeSubtask(subtaskId) {
+      this.task.subtasks = this.task.subtasks.filter((subtask) => subtask.id !== subtaskId);
+    },
+  },
+};
+</script>
+<style scoped>
+.order-tasks {
+  background: var(--card-bg-light);
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: var(--box-shadow);
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.task-label {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+/* Stylizacja reszty elementów pozostaje niezmienna */
+
+.task-input {
+  width: 100%;
+  padding: 1rem;
+  font-size: 1rem;
+  border: 2px solid var(--primary-color);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.task-input:focus {
+  border-color: var(--primary-hover-color);
+  box-shadow: 0 0 10px var(--primary-hover-color);
+}
+
+.input-error {
+  border-color: #ff6b6b;
+}
+
+.error-message {
+  color: #ff6b6b;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.task-status {
+  margin-bottom: 1.5rem;
+}
+
+.status-select {
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 2px solid var(--primary-color);
+  background: var(--input-bg);
+  color: var(--text-color);
+  transition: border-color 0.3s ease;
+}
+
+.status-select:focus {
+  border-color: var(--primary-hover-color);
+  box-shadow: 0 0 10px var(--primary-hover-color);
+}
+
+.subtask-container {
+  margin-top: 2rem;
+}
+
+.subtask-header {
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: var(--text-color);
+  margin-bottom: 1rem;
+}
+
+.subtask-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.subtask-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.subtask-content {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+}
+
+.subtask-input {
+  flex: 2;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 2px solid var(--primary-color);
+  border-radius: 8px;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.subtask-input:focus {
+  border-color: var(--primary-hover-color);
+  box-shadow: 0 0 10px var(--primary-hover-color);
+}
+
+.subtask-status {
+  flex: 1;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 2px solid var(--primary-color);
+  background: var(--input-bg);
+  transition: border-color 0.3s ease;
+}
+
+.subtask-status:focus {
+  border-color: var(--primary-hover-color);
+  box-shadow: 0 0 10px var(--primary-hover-color);
+}
+
+.add-btn,
+.remove-btn {
+  padding: 0.75rem 1.25rem;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  display: flex;
+  align-items: center;
+}
+
+.add-btn i,
+.remove-btn i {
+  margin-right: 0.5rem;
+}
+
+.add-btn:hover,
+.remove-btn:hover {
+  background-color: var(--primary-hover-color);
+  transform: scale(1.05);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.fade-enter,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-20px);
+}
+</style>
+
+
+--- Zawartość pliku: src/components/orders/OrderTools.vue ---
+<template>
+  <div class="order-tools">
+    <h3>Narzędzia</h3>
+    <draggable v-model="tools" group="tools" class="tools-list">
+      <div v-for="(tool, index) in tools" :key="index" class="tool-item">
+        <textarea v-model="tools[index]" rows="2" class="tool-textarea"></textarea>
+        <button @click="removeTool(index)" class="remove-tool-btn">Usuń</button>
+      </div>
+    </draggable>
+    <button @click="addTool" class="add-tool-btn">Dodaj Narzędzie</button>
+  </div>
+</template>
+
+<script>
+import draggable from 'vuedraggable';
+
+export default {
+  components: {
+    draggable
+  },
+  props: {
+    modelValue: Array
+  },
+  computed: {
+    tools: {
+      get() {
+        return this.modelValue;
+      },
+      set(value) {
+        this.$emit('update:modelValue', value);
+      }
+    }
+  },
+  methods: {
+    addTool() {
+      this.tools.push('');
+    },
+    removeTool(index) {
+      this.tools.splice(index, 1);
+    }
+  }
+};
+</script>
+
+<style scoped>
+.order-tools {
+  margin-bottom: 1.5rem;
+}
+
+.tool-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.tool-textarea {
+  flex: 1;
+  padding: 0.75rem;
+  border: 2px solid var(--primary-color);
+  border-radius: 5px;
+}
+
+.add-tool-btn, .remove-tool-btn {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.add-tool-btn:hover, .remove-tool-btn:hover {
+  background-color: var(--primary-hover-color);
+}
+</style>
+
+
+--- Zawartość pliku: src/components/orders/OrdersList.vue ---
+<template>
+  <div class="order-list-container">
+    <div class="toolbar">
+      <input
+        type="text"
+        v-model="searchQuery"
+        placeholder="Szukaj zleceń po nazwie, numerze lub kliencie..."
+        class="search-input"
+      />
+    </div>
+
+    <div class="orders-list">
+      <h1 class="list-header">Lista Zleceń</h1>
+      <transition-group name="fade" tag="table" class="orders-table">
+        <thead>
+          <tr>
+            <th @click="sortTable('orderNumber')">Nr.<i :class="getSortIcon('orderNumber')"></i></th>
+            <th @click="sortTable('orderName')">Nazwa<i :class="getSortIcon('orderName')"></i></th>
+            <th @click="sortTable('clientData')">Klient<i :class="getSortIcon('clientData')"></i></th>
+            <th @click="sortTable('startDate')">Rozpoczęcie<i :class="getSortIcon('startDate')"></i></th>
+            <th @click="sortTable('endDate')">Zakończenie<i :class="getSortIcon('endDate')"></i></th>
+            <th @click="sortTable('address')">Adres<i :class="getSortIcon('address')"></i></th>
+            <th @click="sortTable('status')">Status<i :class="getSortIcon('status')"></i></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="order in filteredOrders" :key="order.id" @click="viewOrder(order.id)" class="order-row">
+            <td>{{ order.orderNumber }}</td>
+            <td>{{ order.orderName }}</td>
+            <td>{{ order.clientData }}</td>
+            <td>{{ formatDate(order.startDate) }}</td>
+            <td>{{ formatDate(order.endDate) }}</td>
+            <td>{{ order.address }}</td>
+            <td :class="getStatusClass(order.status)">
+              <StatusSelector
+                :initial-status="order.status"
+                :order-id="order.id"
+                @status-updated="handleStatusUpdate(order.id, $event)"
+              />
+            </td>
+          </tr>
+        </tbody>
+      </transition-group>
+    </div>
+  </div>
+</template>
+
+
+<script>
+import { ref, onMounted, computed } from 'vue';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '@/main';
+import StatusSelector from './StatusSelector.vue';
+
+export default {
+  name: 'OrderList',
+  components: { StatusSelector },
+  setup() {
+    const orders = ref([]);
+    const searchQuery = ref('');
+    const sortKey = ref('');
+    const sortDirection = ref(1);
+
+    const fetchOrders = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'orders'));
+        orders.value = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      } catch (error) {
+        console.error('Błąd pobierania zleceń:', error);
+      }
+    };
+
+    const filteredOrders = computed(() => {
+      return orders.value.filter((order) => {
+        const query = searchQuery.value.toLowerCase();
+        return (
+          order.orderNumber.toLowerCase().includes(query) ||
+          order.orderName.toLowerCase().includes(query) ||
+          order.clientData.toLowerCase().includes(query)
+        );
+      });
+    });
+
+    const sortTable = (key) => {
+      if (sortKey.value === key) {
+        sortDirection.value *= -1;
+      } else {
+        sortKey.value = key;
+        sortDirection.value = 1;
+      }
+      orders.value.sort((a, b) => {
+        let aVal = a[key];
+        let bVal = b[key];
+        if (typeof aVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+        }
+        return (aVal > bVal ? 1 : -1) * sortDirection.value;
+      });
+    };
+
+    const getSortIcon = (key) => {
+      if (sortKey.value !== key) return '';
+      return sortDirection.value === 1 ? 'pi pi-sort-amount-up' : 'pi pi-sort-amount-down';
+    };
+
+    const formatDate = (date) => {
+      const parsedDate = new Date(date);
+      return parsedDate.toLocaleDateString();
+    };
+
+    const getStatusClass = (status) => {
+      return `status-${status.replace(/\s+/g, '-')}`;
+    };
+
+    const viewOrder = (orderId) => {
+      console.log('Wybrano zlecenie:', orderId);
+    };
+
+    onMounted(() => {
+      fetchOrders();
+    });
+
+    return {
+      searchQuery,
+      filteredOrders,
+      sortTable,
+      formatDate,
+      getSortIcon,
+      getStatusClass,
+    };
+  },
+};
+</script>
+
+<style scoped>
+/* Ogólne style dla kontenera listy */
+.order-list-container {
+  padding: 20px;
+  background-color: var(--card-bg-light);
+  color: var(--text-color);
+  min-height: 100vh;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+[data-theme="dark"] .order-list-container {
+  background-color: var(--card-bg-dark);
+  color: var(--text-dark);
+}
+
+/* Stylizacja paska narzędzi */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+/* Stylizacja input do wyszukiwania */
+.search-input {
+  padding: 12px;
+  width: 350px;
+  border-radius: 8px;
+  border: 2px solid var(--primary-color);
+  background-color: var(--input-bg-light);
+  color: var(--text-color);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+[data-theme="dark"] .search-input {
+  background-color: var(--input-bg-dark);
+  color: var(--text-dark);
+}
+
+/* Stylizacja tabeli */
+.orders-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* Stylizacja nagłówków i komórek tabeli */
+th, td {
+  padding: 15px;
+  text-align: left;
+  border: 1px solid var(--text-color);
+  transition: background-color 0.3s, color 0.3s;
+}
+
+[data-theme="dark"] th, [data-theme="dark"] td {
+  border: 1px solid var(--text-dark);
+}
+
+/* Stylizacja nagłówków */
+th {
+  background-color: var(--primary-color);
+  color: var(--text-light);
+}
+
+[data-theme="dark"] th {
+  background-color: var(--primary-dark);
+  color: var(--text-dark);
+}
+
+/* Stylizacja komórek */
+td {
+  background-color: var(--card-bg-light);
+}
+
+[data-theme="dark"] td {
+  background-color: var(--card-bg-dark);
+}
+
+/* Stylizacja komórek w trybie hover */
+.order-row:hover {
+  background-color: var(--hover-bg-light);
+}
+
+[data-theme="dark"] .order-row:hover {
+  background-color: var(--hover-bg-dark);
+}
+
+/* Animacja fade */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.5s ease-in-out;
+}
+
+.fade-enter, .fade-leave-to {
+  opacity: 0;
+}
+
+/* Stylizacja dla responsywności */
+@media (max-width: 768px) {
+  .orders-table {
+    font-size: 0.85rem;
+  }
+
+  th, td {
+    padding: 8px;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+}
+</style>
+
+
+--- Zawartość pliku: src/components/orders/StatusSelector.vue ---
+<template>
+  <div class="status-dropdown">
+    <select v-model="status" @change="updateStatus" class="status-select" :class="getStatusClass(status)">
+      <option v-for="option in statusOptions" :key="option" :value="option">
+        {{ formatStatus(option) }}
+      </option>
+    </select>
+    <i class="pi pi-chevron-down dropdown-icon"></i>
+  </div>
+</template>
+
+<script>
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/main';
+
+export default {
+  props: {
+    initialStatus: {
+      type: String,
+      required: true,
+    },
+    orderId: {
+      type: String,
+      required: true,
+    },
+  },
+  data() {
+    return {
+      status: this.initialStatus,
+      statusOptions: [
+        'nowe',
+        'oczekujące',
+        'do realizacji',
+        'w realizacji',
+        'zrealizowane',
+        'reklamacja',
+      ],
+    };
+  },
+  methods: {
+    async updateStatus() {
+      try {
+        const orderRef = doc(db, 'orders', this.orderId);
+        await updateDoc(orderRef, {
+          status: this.status,
+        });
+        this.$emit('status-updated', this.status);
+      } catch (error) {
+        console.error('Błąd podczas aktualizacji statusu: ', error);
+      }
+    },
+    formatStatus(status) {
+      const formattedStatuses = {
+        nowe: 'Nowe',
+        oczekujące: 'Oczekujące',
+        'do realizacji': 'Do realizacji',
+        'w realizacji': 'W realizacji',
+        zrealizowane: 'Zrealizowane',
+        reklamacja: 'Reklamacja',
+      };
+      return formattedStatuses[status] || status;
+    },
+    getStatusClass(status) {
+      return `status-${status.replace(/\s+/g, '-')}`;
+    },
+  },
+};
+</script>
+
+<style scoped>
+.status-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.status-select {
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 5px;
+  border: 2px solid var(--primary-color);
+  background-color: var(--input-background);
+  color: var(--text-color);
+  appearance: none;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.status-select:hover, .status-select:focus {
+  border-color: var(--primary-hover-color);
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+}
+
+.dropdown-icon {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.2rem;
+  color: var(--primary-color);
+}
+
+/* Dynamiczne kolory statusów */
+.status-nowe {
+  background-color: var(--status-new);
+  color: #fff;
+}
+
+.status-oczekujące {
+  background-color: var(--status-pending);
+  color: #fff;
+}
+
+.status-do-realizacji {
+  background-color: var(--status-in-progress);
+  color: #fff;
+}
+
+.status-w-realizacji {
+  background-color: var(--status-in-progress);
+  color: #fff;
+}
+
+.status-zrealizowane {
+  background-color: var(--status-completed);
+  color: #fff;
+}
+
+.status-reklamacja {
+  background-color: var(--status-rejected);
+  color: #fff;
+}
+</style>
+

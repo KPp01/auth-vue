@@ -1,0 +1,353 @@
+--- Zawartość pliku: src/App.vue ---
+<template>
+  <div id="app" :class="{ 'dark-mode': isDarkMode }">
+    <NavigationBar @toggle-theme="toggleTheme" />
+    <main class="app-content">
+      <router-view v-slot="{ Component }">
+        <transition name="fade" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
+    </main>
+    <Toast position="bottom-right" />
+  </div>
+</template>
+
+<script>
+import { ref, provide, computed, watch } from 'vue';
+import { useDarkModeStore } from './stores/darkModeStore';  // Zmieniamy na store w Pinia
+import NavigationBar from './components/NavigationBar.vue';
+import Toast from 'primevue/toast';
+
+export default {
+  name: 'App',
+  components: {
+    NavigationBar,
+    Toast
+  },
+  setup() {
+    const darkModeStore = useDarkModeStore(); // Używamy store z Pinia
+    const isDarkMode = computed(() => darkModeStore.isDarkMode);
+
+    // Automatyczna aktualizacja motywu przy zmianie isDarkMode
+    watch(isDarkMode, (newValue) => {
+      localStorage.setItem('theme', newValue ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', newValue ? 'dark' : 'light');
+    });
+
+    const toggleTheme = () => {
+      darkModeStore.toggleDarkMode();
+    };
+
+    const user = computed(() => darkModeStore.user); // Jeśli korzystasz ze stanu użytkownika w Pinia
+
+    provide('isDarkMode', isDarkMode);
+    provide('user', user);
+
+    return {
+      isDarkMode,
+      toggleTheme
+    };
+  }
+};
+</script>
+
+<style>
+#app {
+  font-family: Avenir, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-content {
+  flex: 1;
+  padding: 20px;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.dark-mode {
+  background-color: #121212;
+  color: white;
+}
+</style>
+
+
+--- Zawartość pliku: src/firebase.js ---
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
+import { getMessaging } from 'firebase/messaging';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_API_KEY,
+  authDomain: import.meta.env.VITE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_APP_ID,
+  measurementId: import.meta.env.VITE_MEASUREMENT_ID,
+};
+
+// Inicjalizacja Firebase
+const firebaseApp = initializeApp(firebaseConfig);
+
+// Inicjalizacja usług Firebase
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+const storage = getStorage(firebaseApp);
+const messaging = getMessaging(firebaseApp);
+
+// Inicjalizacja AppCheck z reCAPTCHA
+const appCheck = initializeAppCheck(firebaseApp, {
+  provider: new ReCaptchaV3Provider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
+  isTokenAutoRefreshEnabled: true,
+});
+
+export { auth, db, storage, messaging, appCheck };
+
+
+--- Zawartość pliku: src/i18n.js ---
+import { createI18n } from 'vue-i18n';
+import en from './locales/en.json';
+import pl from './locales/pl.json';
+
+export default createI18n({
+  legacy: false,
+  locale: 'pl', // lub 'en', zależnie od domyślnego języka
+  fallbackLocale: 'en',
+  messages: {
+    en,
+    pl
+  }
+});
+
+--- Zawartość pliku: src/logger.js ---
+/**
+ * Loguj błąd do konsoli lub zewnętrznego systemu.
+ * @param {string} message - Wiadomość błędu.
+ * @param {Error} error - Obiekt błędu (opcjonalnie).
+ */
+export function logError(message, error = null) {
+    if (error) {
+      console.error(`${message}`, error);
+    } else {
+      console.error(`${message}`);
+    }
+  
+    // Możliwość rozszerzenia o logowanie do zewnętrznego systemu, np. Sentry
+    // Sentry.captureException(error);
+  }
+  
+
+--- Zawartość pliku: src/main.js ---
+import { createApp } from 'vue';
+import { createPinia } from 'pinia';
+import { createI18n } from 'vue-i18n';
+import App from './App.vue';
+import './style.css';
+import './assets/styles/orders.css';
+import router from './router/index';
+
+// Import PrimeVue i komponentów
+import PrimeVue from 'primevue/config';
+import ToastService from 'primevue/toastservice';
+import Button from 'primevue/button';
+import InputText from 'primevue/inputtext';
+import Password from 'primevue/password';
+import Toast from 'primevue/toast';
+import Textarea from 'primevue/textarea';
+import DatePicker from 'primevue/datepicker';
+import MultiSelect from 'primevue/multiselect';
+import '@primevue/themes/aura/';
+import 'primeicons/primeicons.css';
+
+// Firebase i inicjalizacja
+import { auth, db, storage, messaging, appCheck } from './firebase';
+import { handleAuthState } from './auth/userService';
+
+// Importuj tłumaczenia
+import en from './locales/en.json';
+import pl from './locales/pl.json';
+
+const i18n = createI18n({
+  legacy: false,
+  locale: 'pl', // domyślny język
+  fallbackLocale: 'en',
+  messages: { en, pl }
+});
+
+const pinia = createPinia();
+
+const app = createApp(App);
+
+app.use(PrimeVue);
+app.use(ToastService);
+app.use(router);
+app.use(i18n);
+app.use(pinia);
+
+app.component('Button', Button);
+app.component('InputText', InputText);
+app.component('Password', Password);
+app.component('Toast', Toast);
+app.component('Textarea', Textarea);
+app.component('DatePicker', DatePicker);
+app.component('MultiSelect', MultiSelect);
+
+handleAuthState();
+
+app.mount('#app');
+
+export { auth, db, storage, messaging, appCheck };
+
+
+--- Zawartość pliku: src/style.css ---
+:root {
+  /* Kolory dla jasnego motywu */
+  --navbar-bg-color: #ffffff;
+  --text-color: #333333; /* Ciemnoszary tekst */
+  --primary-color: #4CAF50;
+  --primary-bg-color: #e8f5e9;
+  --hover-bg-color: #f1f1f1;
+  --button-bg-color: #4CAF50;
+  --button-text-color: white;
+  --button-hover-bg-color: #388e3c;
+
+  /* Kolory tła i tekstu dla jasnego motywu */
+  --background-light: #f7f4e9; /* Kremowe tło */
+  --text-light: #333333; /* Ciemnoszary tekst */
+  --card-bg-light: #f7f4e9; /* Kremowe tło kart */
+
+  /* Kolory statusów */
+  --status-new: #28a745;
+  --status-pending: #ffc107;
+  --status-in-progress: #17a2b8;
+  --status-completed: #007bff;
+  --status-rejected: #dc3545;
+}
+
+[data-theme="dark"] {
+  /* Kolory dla ciemnego motywu */
+  --navbar-bg-color: #333333;
+  --text-color: #f7f4e9; /* Kremowy tekst */
+  --primary-color: #90caf9;
+  --primary-bg-color: #455a64;
+  --hover-bg-color: #444444;
+  --button-bg-color: #90caf9;
+  --button-text-color: #000000;
+  --button-hover-bg-color: #64b5f6;
+
+  /* Kolory tła i tekstu dla ciemnego motywu */
+  --background-dark: #1e1e1e; /* Ciemnoszare tło */
+  --text-dark: #f7f4e9; /* Kremowy tekst */
+  --card-bg-dark: #333333; /* Ciemniejsze tło kart */
+
+  /* Kolory statusów */
+  --status-new: #4CAF50;
+  --status-pending: #ffc107;
+  --status-in-progress: #17a2b8;
+  --status-completed: #007bff;
+  --status-rejected: #dc3545;
+}
+
+/* Globalne tło i kolor tekstu */
+body {
+  font-family: var(--font-family);
+  color: var(--text-light); /* Domyślnie ciemnoszary tekst */
+  background-color: var(--background-light); /* Domyślnie kremowe tło */
+  transition: background-color 0.3s, color 0.3s;
+}
+
+[data-theme="dark"] body {
+  color: var(--text-dark); /* Kremowy tekst w ciemnym motywie */
+  background-color: var(--background-dark); /* Ciemnoszare tło */
+}
+
+/* Stylizacja dla kart */
+.card {
+  background-color: var(--card-bg-light);
+  color: var(--text-light);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+[data-theme="dark"] .card {
+  background-color: var(--card-bg-dark);
+  color: var(--text-dark);
+}
+
+/* Tabela */
+.orders-table th, .orders-table td {
+  border: 1px solid var(--text-color); /* Kolor obramowania zależny od motywu */
+  color: var(--text-light); /* Kolor tekstu w jasnym motywie */
+  background-color: var(--card-bg-light); /* Tło komórek w jasnym motywie */
+}
+
+[data-theme="dark"] .orders-table th, [data-theme="dark"] .orders-table td {
+  border: 1px solid var(--text-dark); /* Kolor obramowania w ciemnym motywie */
+  color: var(--text-dark); /* Kolor tekstu w ciemnym motywie */
+  background-color: var(--card-bg-dark); /* Tło komórek w ciemnym motywie */
+}
+
+/* Przycisk zmiany motywu */
+.theme-toggle-btn {
+  background-color: var(--button-bg-color);
+  color: var(--button-text-color);
+  border: none;
+  padding: 10px;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+[data-theme="dark"] .theme-toggle-btn {
+  background-color: var(--button-bg-color);
+  color: var(--button-text-color);
+}
+
+/* Animacje */
+.fade-in {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.5s, transform 0.5s;
+}
+
+.fade-in.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.button:hover {
+  transform: scale(1.05);
+  transition: transform 0.2s, background-color 0.3s;
+}
+
+/* Responsywność */
+@media (max-width: 768px) {
+  #app {
+    padding: 1rem;
+  }
+
+  .navbar {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+}
+

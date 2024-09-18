@@ -1,0 +1,113 @@
+.order-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 2rem;
+    background-color: var(--card-bg-light);
+    color: var(--text-light);
+    border-radius: 12px; /* Większy zaokrąglony wygląd */
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15); /* Mocniejszy, bardziej widoczny cień */
+    transition: background-color 0.3s ease, color 0.3s ease, transform 0.3s ease;
+  }
+  
+  /* Stylizacja dla ciemnego motywu */
+  [data-theme="dark"] .order-form {
+    background-color: var(--card-bg-dark);
+    color: var(--text-dark);
+  }
+  
+  .order-form:hover {
+    transform: translateY(-2px); /* Delikatny efekt podniesienia po najechaniu */
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  }
+  
+  input, textarea {
+    font-size: 1rem;
+    padding: 0.75rem;
+    border: 2px solid var(--primary-color);
+    border-radius: 8px; /* Większe zaokrąglenie dla nowoczesnego wyglądu */
+    outline: none;
+    background-color: var(--input-background-light);
+    color: var(--text-light);
+    transition: border-color 0.3s, background-color 0.3s, color 0.3s, box-shadow 0.3s;
+  }
+  
+  /* Stylizacja dla ciemnego motywu */
+  [data-theme="dark"] input, [data-theme="dark"] textarea {
+    background-color: var(--input-background-dark);
+    color: var(--text-dark);
+  }
+  
+  input:focus, textarea:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 8px rgba(76, 175, 80, 0.3); /* Zielona poświata na focus */
+  }
+  
+  button {
+    background-color: var(--button-bg-color);
+    color: var(--button-text-color);
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Efekt hover i focus na przyciskach */
+  button:hover {
+    background-color: var(--button-hover-bg-color);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+  }
+  
+  button:focus {
+    box-shadow: 0 0 10px rgba(76, 175, 80, 0.4); /* Zielona poświata */
+  }
+  
+  button:active {
+    transform: scale(0.98); /* Subtelny efekt wciśnięcia */
+  }
+  
+  .error-message {
+    color: #dc3545;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+    display: block;
+    padding-left: 5px;
+    animation: shake 0.3s ease-in-out;
+  }
+  
+  /* Animacja błędu */
+  @keyframes shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    75% { transform: translateX(-5px); }
+    100% { transform: translateX(0); }
+  }
+  
+  /* Stylizacja placeholdera */
+  ::placeholder {
+    color: #888888;
+    opacity: 0.8;
+  }
+  
+  /* Responsywność */
+  @media (max-width: 768px) {
+    .order-form {
+      padding: 1rem;
+      gap: 1rem;
+    }
+  
+    input, textarea {
+      padding: 0.5rem;
+    }
+  
+    button {
+      width: 100%;
+      padding: 1rem;
+    }
+  }
+  

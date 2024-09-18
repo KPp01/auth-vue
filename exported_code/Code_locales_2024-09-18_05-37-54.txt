@@ -1,0 +1,37 @@
+--- Zawartość pliku: src/locales/en.json ---
+{
+    "appName": "F.H.U. Piotr Dądela 2.0 Powered by PCE",
+    "navigation": {
+      "home": "Home",
+      "login": "Login",
+      "register": "Register",
+      "dashboard": "Dashboard",
+      "orderDashboard": "Order Dashboard",
+      "adminDashboard": "Admin Dashboard",
+      "aiDashboard": "AI Dashboard",
+      "workHours": "Work Hours",
+      "updateProfile": "Update Profile",
+      "profile": "Profile",
+      "settings": "Settings",
+      "logout": "Logout"
+    }
+  }
+
+--- Zawartość pliku: src/locales/pl.json ---
+{
+    "appName": "F.H.U. Piotr Dądela 2.0 Zasilane dzięki PCE",
+    "navigation": {
+      "home": "Strona główna",
+      "login": "Logowanie",
+      "register": "Rejestracja",
+      "dashboard": "Panel",
+      "orderDashboard": "Panel Zleceń",
+      "adminDashboard": "Panel Administratora",
+      "aiDashboard": "Panel AI",
+      "workHours": "Godziny Pracy",
+      "updateProfile": "Aktualizuj Profil",
+      "profile": "Profil",
+      "settings": "Ustawienia",
+      "logout": "Wyloguj"
+    }
+  }
